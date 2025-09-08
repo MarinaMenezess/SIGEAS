@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Painel do Administrador - SIGEAS</title>
+  <link rel="stylesheet" href="style.css">
+  <script defer src="script.js"></script>
+</head>
+<body>
+  <div class="container">
+    <h1>Painel do Administrador</h1>
+    <nav>
+      <button onclick="mostrarSecao('turmas')">Gerenciar Turmas</button>
+      <button onclick="mostrarSecao('professores')">Gerenciar Professores</button>
+      <button onclick="mostrarSecao('alunos')">Gerenciar Alunos</button>
+    </nav>
+
+    <section id="turmas" class="painel">
+      <h2>Turmas</h2>
+      <button onclick="criarTurma()">Criar Turma</button>
+      <ul id="listaTurmas"></ul>
+    </section>
+
+    <section id="professores" class="painel hidden">
+      <h2>Professores</h2>
+      <button onclick="criarProfessor()">Cadastrar Professor</button>
+      <ul id="listaProfessores"></ul>
+    </section>
+
+    <section id="alunos" class="painel hidden">
+      <h2>Alunos</h2>
+      <button onclick="criarAluno()">Cadastrar Aluno</button>
+      <ul id="listaAlunos"></ul>
+    </section>
+  </div>
+</body>
+</html>
