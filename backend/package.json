@@ -1,21 +1,13 @@
 {
-  "name": "sigeas",
+  "name": "backend",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/MarinaMenezess/SIGEAS.git"
-  },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/MarinaMenezess/SIGEAS/issues"
-  },
-  "homepage": "https://github.com/MarinaMenezess/SIGEAS#readme",
   "description": "",
   "dependencies": {
     "bcrypt": "^6.0.0",

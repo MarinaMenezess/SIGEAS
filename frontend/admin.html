@@ -6,32 +6,50 @@
   <link rel="stylesheet" href="style.css">
   <script defer src="script.js"></script>
 </head>
-<body>
+<body id="page-admin">
   <div class="container">
     <h1>Painel do Administrador</h1>
     <nav>
       <button onclick="mostrarSecao('turmas')">Gerenciar Turmas</button>
       <button onclick="mostrarSecao('professores')">Gerenciar Professores</button>
       <button onclick="mostrarSecao('alunos')">Gerenciar Alunos</button>
+      <button onclick="logout()">Sair</button>
     </nav>
 
     <section id="turmas" class="painel">
       <h2>Turmas</h2>
-      <button onclick="criarTurma()">Criar Turma</button>
+      <button onclick="abrirModalTurma()">Criar Nova Turma</button>
       <ul id="listaTurmas"></ul>
     </section>
 
     <section id="professores" class="painel hidden">
       <h2>Professores</h2>
-      <button onclick="criarProfessor()">Cadastrar Professor</button>
+      <button onclick="abrirModalUsuario('professor')">Cadastrar Novo Professor</button>
       <ul id="listaProfessores"></ul>
     </section>
 
     <section id="alunos" class="painel hidden">
       <h2>Alunos</h2>
-      <button onclick="criarAluno()">Cadastrar Aluno</button>
+      <button onclick="abrirModalUsuario('aluno')">Cadastrar Novo Aluno</button>
       <ul id="listaAlunos"></ul>
     </section>
   </div>
+
+  <div id="admin-modal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="modal-title"></h2>
+        <button class="modal-close-btn" onclick="fecharModal()">&times;</button>
+      </div>
+      <form id="modal-form">
+        <div id="modal-form-fields"></div>
+        <div class="modal-actions">
+          <button type="button" onclick="fecharModal()">Cancelar</button>
+          <button type="submit">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
 </body>
 </html>
