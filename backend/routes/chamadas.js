@@ -1,103 +1,82 @@
-// routes/turmas.js
+// routes/chamadas.js
 const express = require('express');
 const pool = require('../db');
 const { authenticateToken, authorizeRoles } = require('../authMiddleware');
 const router = express.Router();
 
-// GET /api/turmas  (admin, professor, aluno) -> lista turmas (filtra por professor/aluno se necessário)
-router.get('/', authenticateToken, async (req, res) => {
-  const user = req.user;
-  try {
-    if (user.perfil === 'administrador') {
-      const [rows] = await pool.query('SELECT * FROM turmas');
-      return res.json(rows);
+// GET /api/chamadas/turma/:id_turma/data/:data -> Pega a chamada de um dia específico
+router.get('/turma/:id_turma/data/:data', authenticateToken, authorizeRoles('professor'), async (req, res) => {
+    const { id_turma, data } = req.params;
+    try {
+        const [rows] = await pool.query(
+            'SELECT id_aluno, status FROM chamadas WHERE id_turma = ? AND data = ?',
+            [id_turma, data]
+        );
+        // Transforma o array em um objeto para fácil acesso no frontend: { id_aluno: status }
+        const presencas = rows.reduce((acc, row) => {
+            acc[row.id_aluno] = row.status;
+            return acc;
+        }, {});
+        res.json(presencas);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Erro ao buscar chamada' });
     }
-    if (user.perfil === 'professor') {
-      const [rows] = await pool.query(
-        `SELECT t.* FROM turmas t
-         JOIN professores_turmas pt ON pt.id_turma=t.id_turma
-         WHERE pt.id_professor = ?`, [user.id_usuario]);
-      return res.json(rows);
-    }
-    if (user.perfil === 'aluno') {
-      const [rows] = await pool.query(
-        `SELECT t.* FROM turmas t
-         JOIN alunos_turmas at ON at.id_turma=t.id_turma
-         WHERE at.id_aluno = ?`, [user.id_usuario]);
-      return res.json(rows);
-    }
-    res.json([]);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Erro' });
-  }
 });
 
-// POST /api/turmas  (admin) - criar
-router.post('/', authenticateToken, authorizeRoles('administrador'), async (req, res) => {
-  const { nome, descricao, ano } = req.body;
-  const [r] = await pool.query('INSERT INTO turmas (nome, descricao, ano) VALUES (?, ?, ?)', [nome, descricao, ano]);
-  res.status(201).json({ id_turma: r.insertId, nome, descricao, ano });
-});
+// POST /api/chamadas -> Registra a chamada para uma turma em um dia
+router.post('/', authenticateToken, authorizeRoles('professor'), async (req, res) => {
+    const { id_turma, data, presencas } = req.body;
+    const id_professor = req.user.id_usuario;
 
-// GET /api/turmas/:id/alunos  (admin, professor assigned)
-router.get('/:id/alunos', authenticateToken, async (req, res) => {
-  const id_turma = req.params.id;
-  const user = req.user;
-
-  // admin allowed always; professor only if assigned; student only if enrolled
-  try {
-    if (user.perfil === 'professor') {
-      const [[assigned]] = await pool.query('SELECT 1 FROM professores_turmas WHERE id_professor=? AND id_turma=? LIMIT 1', [user.id_usuario, id_turma]);
-      if (!assigned) return res.status(403).json({ error: 'Professor não alocado nesta turma' });
-    }
-    if (user.perfil === 'aluno') {
-      const [[mat]] = await pool.query('SELECT 1 FROM alunos_turmas WHERE id_aluno=? AND id_turma=? LIMIT 1', [user.id_usuario, id_turma]);
-      if (!mat) return res.status(403).json({ error: 'Aluno não matriculado' });
+    if (!id_turma || !data || !presencas) {
+        return res.status(400).json({ error: 'Dados incompletos' });
     }
 
-    const [rows] = await pool.query(
-      `SELECT u.id_usuario, u.nome, u.email, at.data_matricula
-       FROM usuarios u
-       JOIN alunos_turmas at ON at.id_aluno = u.id_usuario
-       WHERE at.id_turma = ?`, [id_turma]);
+    const connection = await pool.getConnection();
+    try {
+        // Verifica se o professor está alocado na turma
+        const [[assigned]] = await connection.query('SELECT 1 FROM professores_turmas WHERE id_professor=? AND id_turma=? LIMIT 1', [id_professor, id_turma]);
+        if (!assigned) {
+            connection.release();
+            return res.status(403).json({ error: 'Professor não alocado nesta turma' });
+        }
 
-    res.json(rows);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Erro' });
-  }
+        await connection.beginTransaction();
+
+        // Apaga a chamada antiga para este dia e turma (garante que podemos salvar novamente)
+        await connection.query('DELETE FROM chamadas WHERE id_turma = ? AND data = ?', [id_turma, data]);
+
+        // Insere os novos registros de presença
+        const inserts = Object.entries(presencas).map(([id_aluno, status]) => {
+            return connection.query('INSERT INTO chamadas (id_aluno, id_turma, data, status) VALUES (?, ?, ?, ?)', [id_aluno, id_turma, data, status]);
+        });
+        await Promise.all(inserts);
+
+        await connection.commit();
+        res.status(201).json({ message: 'Chamada registrada com sucesso!' });
+    } catch (err) {
+        await connection.rollback();
+        console.error(err);
+        res.status(500).json({ error: 'Erro ao registrar chamada' });
+    } finally {
+        connection.release();
+    }
 });
 
-// POST /api/turmas/:id/matricular  (admin)
-router.post('/:id/matricular', authenticateToken, authorizeRoles('administrador'), async (req, res) => {
-  const id_turma = req.params.id;
-  const { id_aluno, data_matricula } = req.body;
-  await pool.query('INSERT INTO alunos_turmas (id_aluno, id_turma, data_matricula) VALUES (?, ?, ?)', [id_aluno, id_turma, data_matricula || new Date()]);
-  res.json({ ok: true });
-});
-
-// POST /api/turmas/:id/professor  (admin) - associar professor
-router.post('/:id/professor', authenticateToken, authorizeRoles('administrador'), async (req, res) => {
-  const id_turma = req.params.id;
-  const { id_professor } = req.body;
-  await pool.query('INSERT INTO professores_turmas (id_professor, id_turma) VALUES (?, ?)', [id_professor, id_turma]);
-  res.json({ ok: true });
-});
-
-// PUT /api/turmas/:id  (admin)
-router.put('/:id', authenticateToken, authorizeRoles('administrador'), async (req, res) => {
-  const id = req.params.id;
-  const { nome, descricao, ano } = req.body;
-  await pool.query('UPDATE turmas SET nome=?, descricao=?, ano=? WHERE id_turma=?', [nome, descricao, ano, id]);
-  res.json({ ok: true });
-});
-
-// DELETE /api/turmas/:id (admin)
-router.delete('/:id', authenticateToken, authorizeRoles('administrador'), async (req, res) => {
-  const id = req.params.id;
-  await pool.query('DELETE FROM turmas WHERE id_turma=?', [id]);
-  res.json({ ok: true });
+// GET /api/chamadas/me -> Aluno busca seu histórico de presença
+router.get('/me', authenticateToken, authorizeRoles('aluno'), async (req, res) => {
+    const id_aluno = req.user.id_usuario;
+    try {
+        const [rows] = await pool.query(
+            'SELECT data, status FROM chamadas WHERE id_aluno = ? ORDER BY data DESC',
+            [id_aluno]
+        );
+        res.json(rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Erro ao buscar histórico de presença.' });
+    }
 });
 
 module.exports = router;

@@ -4,18 +4,93 @@ const pool = require('../db');
 const { authenticateToken, authorizeRoles } = require('../authMiddleware');
 const router = express.Router();
 
-// GET /api/turmas (para listar as turmas)
+// GET /api/turmas (Filtra por perfil de usuário)
 router.get('/', authenticateToken, async (req, res) => {
-    const [rows] = await pool.query(`
-        SELECT t.*, u.nome as professor_nome 
-        FROM turmas t 
-        LEFT JOIN professores_turmas pt ON t.id_turma = pt.id_turma 
-        LEFT JOIN usuarios u ON pt.id_professor = u.id_usuario
-    `);
-    res.json(rows);
+    const user = req.user;
+    try {
+        if (user.perfil === 'administrador') {
+            const [rows] = await pool.query(`
+                SELECT t.*, u.nome as professor_nome 
+                FROM turmas t 
+                LEFT JOIN professores_turmas pt ON t.id_turma = pt.id_turma 
+                LEFT JOIN usuarios u ON pt.id_professor = u.id_usuario
+            `);
+            return res.json(rows);
+        }
+        if (user.perfil === 'professor') {
+            const [rows] = await pool.query(
+              `SELECT t.* FROM turmas t
+               JOIN professores_turmas pt ON pt.id_turma = t.id_turma
+               WHERE pt.id_professor = ?`, [user.id_usuario]);
+            return res.json(rows);
+        }
+        if (user.perfil === 'aluno') {
+            const [rows] = await pool.query(
+              `SELECT t.* FROM turmas t
+               JOIN alunos_turmas at ON at.id_turma=t.id_turma
+               WHERE at.id_aluno = ?`, [user.id_usuario]);
+            return res.json(rows);
+        }
+        res.json([]);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Erro ao buscar turmas' });
+    }
 });
 
-// POST /api/turmas (para criar turma)
+// GET /api/turmas/:id/alunos (Busca alunos de uma turma)
+router.get('/:id/alunos', authenticateToken, async (req, res) => {
+  const id_turma = req.params.id;
+  const user = req.user;
+  try {
+    if (user.perfil === 'professor') {
+      const [[assigned]] = await pool.query('SELECT 1 FROM professores_turmas WHERE id_professor=? AND id_turma=? LIMIT 1', [user.id_usuario, id_turma]);
+      if (!assigned) return res.status(403).json({ error: 'Professor não alocado nesta turma' });
+    }
+    const [rows] = await pool.query(
+      `SELECT u.id_usuario, u.nome, u.email, at.data_matricula
+       FROM usuarios u
+       JOIN alunos_turmas at ON at.id_aluno = u.id_usuario
+       WHERE at.id_turma = ?`, [id_turma]);
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro ao buscar alunos da turma' });
+  }
+});
+
+// GET /api/turmas/:id/alunos/faltas (Busca alunos e contabiliza as faltas)
+router.get('/:id/alunos/faltas', authenticateToken, authorizeRoles('professor'), async (req, res) => {
+    const { id: id_turma } = req.params;
+    const { id_usuario: id_professor } = req.user;
+
+    try {
+        const [[assigned]] = await pool.query('SELECT 1 FROM professores_turmas WHERE id_professor=? AND id_turma=? LIMIT 1', [id_professor, id_turma]);
+        if (!assigned) return res.status(403).json({ error: 'Professor não alocado nesta turma' });
+
+        const [alunos] = await pool.query(`
+            SELECT 
+                u.id_usuario, 
+                u.nome, 
+                u.email, 
+                COUNT(c.id_chamada) AS total_faltas
+            FROM usuarios u
+            JOIN alunos_turmas at ON u.id_usuario = at.id_aluno
+            LEFT JOIN chamadas c ON u.id_usuario = c.id_aluno AND c.id_turma = at.id_turma AND c.status = 'falta'
+            WHERE at.id_turma = ?
+            GROUP BY u.id_usuario, u.nome, u.email
+            ORDER BY u.nome;
+        `, [id_turma]);
+
+        res.json(alunos);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Erro ao buscar alunos e suas faltas.' });
+    }
+});
+
+
+// POST /api/turmas
 router.post('/', authenticateToken, authorizeRoles('administrador'), async (req, res) => {
   const { nome, descricao, ano, id_professor } = req.body;
   const connection = await pool.getConnection();
@@ -36,7 +111,7 @@ router.post('/', authenticateToken, authorizeRoles('administrador'), async (req,
   }
 });
 
-// PUT /api/turmas/:id (para editar turma)
+// PUT /api/turmas/:id
 router.put('/:id', authenticateToken, authorizeRoles('administrador'), async (req, res) => {
   const idTurma = req.params.id;
   const { nome, descricao, ano, id_professor } = req.body;
@@ -44,13 +119,10 @@ router.put('/:id', authenticateToken, authorizeRoles('administrador'), async (re
   try {
     await connection.beginTransaction();
     await connection.query('UPDATE turmas SET nome=?, descricao=?, ano=? WHERE id_turma=?', [nome, descricao, ano, idTurma]);
-    
-    // Atualiza a associação do professor
     await connection.query('DELETE FROM professores_turmas WHERE id_turma = ?', [idTurma]);
     if (id_professor) {
       await connection.query('INSERT INTO professores_turmas (id_professor, id_turma) VALUES (?, ?)', [id_professor, idTurma]);
     }
-    
     await connection.commit();
     res.json({ ok: true });
   } catch (err) {
@@ -61,7 +133,7 @@ router.put('/:id', authenticateToken, authorizeRoles('administrador'), async (re
   }
 });
 
-// DELETE /api/turmas/:id (para excluir turma)
+// DELETE /api/turmas/:id
 router.delete('/:id', authenticateToken, authorizeRoles('administrador'), async (req, res) => {
   await pool.query('DELETE FROM turmas WHERE id_turma=?', [req.params.id]);
   res.json({ ok: true });

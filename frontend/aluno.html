@@ -6,17 +6,19 @@
   <link rel="stylesheet" href="style.css">
   <script defer src="script.js"></script>
 </head>
-<body>
+<body id="page-aluno">
   <div class="container">
     <h1>Painel do Aluno</h1>
     <h2>Minha Turma</h2>
-    <p id="turmaAluno"></p>
+    <p id="turmaAluno">Carregando...</p>
 
     <h2>Presenças</h2>
-    <ul id="presencasAluno"></ul>
+    <ul id="presencasAluno"><li>Carregando...</li></ul>
 
     <h2>Notas</h2>
-    <ul id="notasAluno"></ul>
+    <ul id="notasAluno"><li>Carregando...</li></ul>
+
+    <button onclick="logout()" style="margin-top: 2rem;">Sair</button>
   </div>
 </body>
 </html>
