@@ -280,3 +280,54 @@ li button {
 #form-add-nota h4 {
   margin-bottom: 0.5rem;
 }
+
+/* Estilos para a nova tabela de notas */
+.tabela-notas-container {
+  overflow-x: auto;
+  margin-bottom: 2rem;
+}
+
+#tabelaNotas, .tabela-lancar-notas {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+  background-color: white;
+}
+
+#tabelaNotas th, #tabelaNotas td, .tabela-lancar-notas th, .tabela-lancar-notas td {
+  border: 1px solid #98D7C2;
+  padding: 0.8rem;
+  text-align: left;
+}
+
+#tabelaNotas th, .tabela-lancar-notas th {
+  background-color: #f2f2f2;
+  font-weight: 600;
+}
+
+#tabelaNotas input, .tabela-lancar-notas input {
+  width: 60px; /* Largura fixa para os inputs de nota */
+  padding: 0.4rem;
+  margin: 0;
+  text-align: center;
+}
+
+#form-lancar-em-lote h4 {
+  margin-top: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+/* Estilo para o botão de exclusão de avaliação */
+.btn-excluir-aval {
+  background: none;
+  border: none;
+  color: #a94442;
+  font-size: 1.2rem;
+  cursor: pointer;
+  margin-left: 0.5rem;
+  padding: 0;
+}
+
+.btn-excluir-aval:hover {
+  color: #843534;
+}

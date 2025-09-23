@@ -265,7 +265,7 @@ function selecionarTurma(id_turma, nome_turma) {
 function esconderConteudosTurma() {
     document.getElementById('listaAlunosResumo').classList.add('hidden');
     document.getElementById('formChamada').classList.add('hidden');
-    document.getElementById('listaAlunosParaNotas').classList.add('hidden');
+    document.getElementById('conteudoNotas').classList.add('hidden');
 }
 
 async function verResumoDaTurma() {
@@ -350,86 +350,221 @@ async function salvarChamada(event, id_turma) {
     }
 }
 
+// Nova função para renderizar a tabela de notas na página
 async function verAlunosParaNotas() {
     esconderConteudosTurma();
-    const { id: id_turma } = turmaSelecionadaGlobal;
-    const listaAlunosParaNotasEl = document.getElementById('listaAlunosParaNotas');
-    listaAlunosParaNotasEl.classList.remove('hidden');
-    listaAlunosParaNotasEl.innerHTML = '<li>Carregando alunos...</li>';
-
+    const { id: id_turma, nome: nome_turma } = turmaSelecionadaGlobal;
+    const notasContainer = document.getElementById('conteudoNotas');
+    notasContainer.classList.remove('hidden');
+    notasContainer.innerHTML = '<li>Carregando notas...</li>';
+    
     try {
-        const alunos = await (await apiFetch(`/turmas/${id_turma}/alunos`)).json();
-        if (alunos.length > 0) {
-            listaAlunosParaNotasEl.innerHTML = alunos.map(aluno => `
-                <li class="aluno-item-nota">
-                    <span>${aluno.nome}</span>
-                    <button onclick="abrirModalNotas(${id_turma}, ${aluno.id_usuario}, '${aluno.nome.replace(/'/g, "\\'")}')">Lançar/Ver Notas</button>
-                </li>
-            `).join('');
-        } else {
-            listaAlunosParaNotasEl.innerHTML = '<li>Nenhum aluno encontrado nesta turma.</li>';
+        const alunosComNotas = await (await apiFetch(`/notas/turma/${id_turma}`)).json();
+        
+        if (alunosComNotas.length === 0) {
+            notasContainer.innerHTML = "<p>Nenhum aluno encontrado nesta turma.</p>";
+            return;
         }
+
+        const avaliacoesUnicas = Array.from(new Set(alunosComNotas.flatMap(a => a.avaliacoes.map(av => ({
+            descricao: av.descricao,
+            trimestre: av.trimestre,
+            id: av.id_avaliacao
+        })))));
+        
+        let tabelaHTML = `
+            <div id="controles-tabela">
+                <button onclick="abrirModalAddAvaliacao()">Adicionar Avaliação</button>
+                <div id="filtro-trimestre">
+                    <span>Filtrar por Trimestre:</span>
+                    <button class="btn-trimestre" data-trimestre="1">1º</button>
+                    <button class="btn-trimestre" data-trimestre="2">2º</button>
+                    <button class="btn-trimestre" data-trimestre="3">3º</button>
+                    <button class="btn-trimestre active" data-trimestre="todos">Todos</button>
+                </div>
+            </div>
+            <div class="tabela-notas-container">
+                <table id="tabelaNotas">
+                    <thead>
+                        <tr>
+                            <th>Aluno</th>
+                            ${avaliacoesUnicas.map(av => `<th class="nota-header" data-trimestre="${av.trimestre}">${av.descricao} <button class="btn-excluir-aval" data-desc="${av.descricao}">&times;</button></th>`).join('')}
+                            <th>Média Final</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${alunosComNotas.map(aluno => `
+                            <tr>
+                                <td>${aluno.nome}</td>
+                                ${avaliacoesUnicas.map(av => {
+                                    const nota = aluno.avaliacoes.find(alunoAv => alunoAv.descricao === av.descricao)?.nota || '---';
+                                    const avaliacaoID = aluno.avaliacoes.find(alunoAv => alunoAv.descricao === av.descricao)?.id_avaliacao || null;
+                                    return `<td data-id="${avaliacaoID}">${nota}</td>`;
+                                }).join('')}
+                                <td>${aluno.media_final !== null ? aluno.media_final.toFixed(2) : '---'}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+        
+        notasContainer.innerHTML = tabelaHTML;
+
+        // Adiciona os eventos de clique para os botões de filtro
+        document.querySelectorAll('.btn-trimestre').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.btn-trimestre').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const trimestre = btn.dataset.trimestre;
+                filtrarTabelaPorTrimestre(trimestre);
+            });
+        });
+        
+        // Adiciona o evento de clique para os botões de exclusão de avaliação
+        document.querySelectorAll('.btn-excluir-aval').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const descricao = btn.dataset.desc;
+                excluirAvaliacaoPorDescricao(descricao, id_turma);
+            });
+        });
+
     } catch (e) {
-        console.error(e);
-        listaAlunosParaNotasEl.innerHTML = '<li>Erro ao carregar alunos.</li>';
+        console.error("Erro ao carregar notas no modal:", e);
+        notasContainer.innerHTML = "<p>Erro ao carregar notas. Verifique a conexão com o servidor.</p>";
     }
 }
 
-async function abrirModalNotas(id_turma, id_aluno, nome_aluno) {
-    const modal = document.getElementById('modal-notas');
-    // CORREÇÃO: Busca os elementos corretos dentro do modal de notas
+// Abre o modal APENAS para adicionar uma nova avaliação
+async function abrirModalAddAvaliacao() {
+    const { id: id_turma, nome: nome_turma } = turmaSelecionadaGlobal;
     const modalTitulo = document.getElementById('modal-notas-titulo');
     const modalCorpo = document.getElementById('modal-notas-corpo');
 
-    modalTitulo.textContent = `Notas de: ${nome_aluno}`;
-    modalCorpo.innerHTML = `<p>Carregando notas...</p>`;
-    modal.style.display = 'flex';
+    modalTitulo.textContent = `Nova Avaliação para ${nome_turma}`;
+    modalCorpo.innerHTML = `<p>Carregando alunos...</p>`;
+    notasModal.style.display = 'flex';
 
-    // A requisição busca os dados de todos os alunos, depois filtramos
-    const alunosComNotas = await (await apiFetch(`/notas/turma/${id_turma}`)).json();
-    const alunoData = alunosComNotas.find(a => a.id_usuario === id_aluno);
-    
-    if (!alunoData) {
-        modalCorpo.innerHTML = "<p>Não foi possível carregar os dados do aluno.</p>";
+    try {
+        const alunos = await (await apiFetch(`/turmas/${id_turma}/alunos`)).json();
+
+        if (alunos.length === 0) {
+            modalCorpo.innerHTML = "<p>Nenhum aluno encontrado nesta turma.</p>";
+            return;
+        }
+
+        modalCorpo.innerHTML = `
+            <form id="form-lancar-em-lote">
+                <h4>Adicionar Notas para todos os alunos</h4>
+                <input type="text" id="nova-avaliacao-descricao" placeholder="Descrição da Avaliação" required>
+                <select id="trimestre" required>
+                    <option value="" disabled selected>Selecione o Trimestre</option>
+                    <option value="1">1º Trimestre</option>
+                    <option value="2">2º Trimestre</option>
+                    <option value="3">3º Trimestre</option>
+                </select>
+                <div class="tabela-notas-container">
+                    <table class="tabela-lancar-notas">
+                        <thead><tr><th>Aluno</th><th>Nota</th></tr></thead>
+                        <tbody>
+                            ${alunos.map(aluno => `
+                                <tr>
+                                    <td>${aluno.nome}</td>
+                                    <td>
+                                        <input type="number" step="0.1" min="0" max="10" name="nota_${aluno.id_usuario}" placeholder="Nota" required>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+                <button type="submit">Lançar Avaliação</button>
+            </form>
+        `;
+        
+        document.getElementById('form-lancar-em-lote').onsubmit = async (event) => {
+            event.preventDefault();
+            const descricao = document.getElementById('nova-avaliacao-descricao').value;
+            const trimestre = document.getElementById('trimestre').value;
+            const notas = [];
+            const form = event.target;
+            form.querySelectorAll('input[type="number"]').forEach(input => {
+                const id_aluno = input.name.replace('nota_', '');
+                notas.push({ id_aluno: parseInt(id_aluno), nota: parseFloat(input.value) });
+            });
+            
+            const payload = { id_turma, descricao, trimestre, notas };
+            
+            const response = await apiFetch('/notas/lancar-em-lote', 'POST', payload);
+            if (response.ok) {
+                alert('✅ Avaliação lançada com sucesso!');
+                fecharModalNotas();
+                verAlunosParaNotas(); // Recarrega a tabela na página
+            } else {
+                alert('❌ Erro ao lançar avaliação.');
+            }
+        };
+    } catch (e) {
+        console.error("Erro ao carregar modal de avaliação:", e);
+        modalCorpo.innerHTML = "<p>Erro ao carregar modal. Verifique a conexão com o servidor.</p>";
+    }
+}
+
+// Nova função para excluir uma avaliação por descrição e turma
+async function excluirAvaliacaoPorDescricao(descricao, id_turma) {
+    if (!confirm(`Tem certeza que deseja excluir todas as notas da avaliação "${descricao}" desta turma?`)) {
         return;
     }
 
-    const mediaFormatada = alunoData.media_final !== null ? alunoData.media_final.toFixed(2) : 'N/A';
+    try {
+        const alunosComNotas = await (await apiFetch(`/notas/turma/${id_turma}`)).json();
+        const avaliacoesParaExcluir = alunosComNotas.flatMap(aluno => aluno.avaliacoes)
+                                                   .filter(av => av.descricao === descricao)
+                                                   .map(av => av.id_avaliacao);
 
-    modalCorpo.innerHTML = `
-        <div class="resumo-media">
-            <strong>Média Atual:</strong> ${mediaFormatada}
-        </div>
-        <ul class="lista-avaliacoes-modal">
-            ${alunoData.avaliacoes.map(av => `
-                <li>
-                    <span>${av.descricao} (${new Date(av.data_avaliacao).toLocaleDateString('pt-BR',{timeZone:'UTC'})}):</span>
-                    <strong>${av.nota}</strong>
-                </li>
-            `).join('') || '<li>Nenhuma nota lançada.</li>'}
-        </ul>
-        <form id="form-add-nota">
-            <h4>Adicionar Nova Nota</h4>
-            <input type="text" id="nova-nota-descricao" placeholder="Descrição (Ex: Prova 1)" required>
-            <input type="number" step="0.1" min="0" max="10" id="nova-nota-valor" placeholder="Nota (Ex: 8.5)" required>
-            <button type="submit">Adicionar Nota</button>
-        </form>
-    `;
-
-    document.getElementById('form-add-nota').onsubmit = async (event) => {
-        event.preventDefault();
-        const descricao = document.getElementById('nova-nota-descricao').value;
-        const nota = document.getElementById('nova-nota-valor').value;
-        const payload = { id_turma, id_aluno, descricao, nota };
-        
-        const response = await apiFetch('/notas', 'POST', payload);
-        if (response.ok) {
-            alert('✅ Nota adicionada com sucesso!');
-            abrirModalNotas(id_turma, id_aluno, nome_aluno);
+        if (avaliacoesParaExcluir.length > 0) {
+            await Promise.all(avaliacoesParaExcluir.map(id => apiFetch(`/notas/${id}`, 'DELETE')));
+            alert('✅ Avaliações excluídas com sucesso!');
+            verAlunosParaNotas(); // Recarrega a tabela
         } else {
-            alert('❌ Erro ao adicionar nota.');
+            alert('Nenhuma avaliação encontrada com essa descrição.');
         }
-    };
+
+    } catch (e) {
+        console.error("Erro ao excluir avaliações:", e);
+        alert('❌ Erro ao excluir avaliações.');
+    }
+}
+
+// Função de filtragem (lógica no frontend)
+function filtrarTabelaPorTrimestre(trimestre) {
+    const tabela = document.getElementById('tabelaNotas');
+    if (!tabela) return;
+
+    const headers = tabela.querySelectorAll('th.nota-header');
+    const rows = tabela.querySelectorAll('tbody tr');
+    
+    headers.forEach(header => {
+        const headerTrimestre = header.dataset.trimestre;
+        if (trimestre === 'todos' || headerTrimestre === trimestre) {
+            header.style.display = '';
+        } else {
+            header.style.display = 'none';
+        }
+    });
+
+    rows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        // Exibe/esconde as células correspondentes ao cabeçalho
+        for (let i = 1; i < cells.length - 1; i++) { // Ignora a primeira e a última célula (aluno e média)
+            const header = headers[i - 1];
+            if (header.style.display === 'none') {
+                cells[i].style.display = 'none';
+            } else {
+                cells[i].style.display = '';
+            }
+        }
+    });
 }
 
 // ===============================

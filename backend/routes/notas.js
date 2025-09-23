@@ -4,28 +4,24 @@ const pool = require('../db');
 const { authenticateToken, authorizeRoles } = require('../authMiddleware');
 const router = express.Router();
 
-// GET /api/notas/turma/:id -> ROTA OTIMIZADA E CORRIGIDA
+// GET /api/notas/turma/:id -> Busca notas de todos os alunos de uma turma
 router.get('/turma/:id', authenticateToken, authorizeRoles('professor'), async (req, res) => {
     const { id: id_turma } = req.params;
     try {
-        // Passo 1: Busca todos os alunos da turma
         const [alunos] = await pool.query(
             `SELECT u.id_usuario, u.nome FROM usuarios u
              JOIN alunos_turmas at ON u.id_usuario = at.id_aluno
              WHERE at.id_turma = ? ORDER BY u.nome`, [id_turma]
         );
 
-        // Se não houver alunos, retorna uma lista vazia
         if (alunos.length === 0) {
             return res.json([]);
         }
 
-        // Passo 2: Busca TODAS as avaliações da turma de uma só vez
         const [avaliacoes] = await pool.query(
             'SELECT * FROM avaliacoes WHERE id_turma = ?', [id_turma]
         );
 
-        // Passo 3: Organiza as avaliações por aluno para fácil acesso
         const avaliacoesPorAluno = avaliacoes.reduce((acc, aval) => {
             if (!acc[aval.id_aluno]) {
                 acc[aval.id_aluno] = [];
@@ -34,7 +30,6 @@ router.get('/turma/:id', authenticateToken, authorizeRoles('professor'), async (
             return acc;
         }, {});
 
-        // Passo 4: Combina os dados e calcula a média
         const resultadoFinal = alunos.map(aluno => {
             const notasDoAluno = avaliacoesPorAluno[aluno.id_usuario] || [];
             const total = notasDoAluno.reduce((sum, aval) => sum + parseFloat(aval.nota), 0);
@@ -49,38 +44,60 @@ router.get('/turma/:id', authenticateToken, authorizeRoles('professor'), async (
 
         res.json(resultadoFinal);
     } catch (err) {
-        console.error("Erro detalhado ao buscar notas:", err); // Log de erro melhorado
+        console.error("Erro detalhado ao buscar notas:", err);
         res.status(500).json({ error: 'Erro ao buscar notas da turma' });
     }
 });
 
-// POST /api/notas -> Adiciona uma nova nota para um aluno
-router.post('/', authenticateToken, authorizeRoles('professor'), async (req, res) => {
-    const { id_turma, id_aluno, descricao, nota } = req.body;
+// POST /api/notas/lancar-em-lote -> Adiciona uma nova nota para todos os alunos de uma turma
+router.post('/lancar-em-lote', authenticateToken, authorizeRoles('professor'), async (req, res) => {
+    const { id_turma, descricao, trimestre, notas } = req.body;
+    
+    if (!id_turma || !descricao || !trimestre || !notas || notas.length === 0) {
+        return res.status(400).json({ error: 'Dados incompletos para o lançamento de notas.' });
+    }
+
+    const connection = await pool.getConnection();
     try {
-        if (!id_turma || !id_aluno || !descricao || !nota) {
-            return res.status(400).json({ error: 'Dados incompletos' });
-        }
+        await connection.beginTransaction();
         const data_avaliacao = new Date().toISOString().slice(0, 10);
         
-        const [result] = await pool.query(
-            'INSERT INTO avaliacoes (id_aluno, id_turma, descricao, nota, data_avaliacao) VALUES (?, ?, ?, ?, ?)',
-            [id_aluno, id_turma, descricao, nota, data_avaliacao]
-        );
-        
-        res.status(201).json({ id_avaliacao: result.insertId });
+        for (const notaAluno of notas) {
+            await connection.query(
+                'INSERT INTO avaliacoes (id_aluno, id_turma, descricao, nota, trimestre, data_avaliacao) VALUES (?, ?, ?, ?, ?, ?)',
+                [notaAluno.id_aluno, id_turma, descricao, notaAluno.nota, trimestre, data_avaliacao]
+            );
+        }
+
+        await connection.commit();
+        res.status(201).json({ message: 'Notas lançadas com sucesso!' });
     } catch (err) {
+        await connection.rollback();
         console.error(err);
-        res.status(500).json({ error: 'Erro ao salvar nota' });
+        res.status(500).json({ error: 'Erro ao lançar notas.' });
+    } finally {
+        connection.release();
     }
 });
 
-// GET /api/notas/me -> Atualizado para a nova tabela
+// DELETE /api/notas/:id -> Exclui uma avaliação específica
+router.delete('/:id', authenticateToken, authorizeRoles('professor'), async (req, res) => {
+    const { id: id_avaliacao } = req.params;
+    try {
+        await pool.query('DELETE FROM avaliacoes WHERE id_avaliacao = ?', [id_avaliacao]);
+        res.status(200).json({ message: 'Avaliação excluída com sucesso.' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Erro ao excluir avaliação.' });
+    }
+});
+
+// GET /api/notas/me -> Aluno busca suas notas
 router.get('/me', authenticateToken, authorizeRoles('aluno'), async (req, res) => {
     const id_aluno = req.user.id_usuario;
     try {
         const [rows] = await pool.query(
-            `SELECT a.descricao, a.nota, a.data_avaliacao, t.nome as turma_nome
+            `SELECT a.descricao, a.nota, a.data_avaliacao, a.trimestre, t.nome as turma_nome
              FROM avaliacoes a
              JOIN turmas t ON a.id_turma = t.id_turma
              WHERE a.id_aluno = ? ORDER BY a.data_avaliacao DESC`,

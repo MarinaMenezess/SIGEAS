@@ -33,8 +33,23 @@
               <ul id="listaAlunosChamada"></ul>
               <button type="submit">Salvar Chamada</button>
           </form>
-          <ul id="listaAlunosParaNotas" class="hidden"></ul>
+          
+          <div id="conteudoNotas" class="hidden"></div>
       </div>
     </section>
 
     <button onclick="logout()" style="margin-top: 2rem;">Sair</button>
+  </div>
+
+  <div id="modal-notas" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="modal-notas-titulo"></h2>
+        <button class="modal-close-btn" onclick="fecharModalNotas()">&times;</button>
+      </div>
+      <div id="modal-notas-corpo">
+        </div>
+    </div>
+  </div>
+</body>
+</html>

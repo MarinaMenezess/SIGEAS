@@ -66,17 +66,16 @@ CREATE TABLE chamadas (
 );
 
 -- ================================
--- Tabela de Notas
+-- Tabela de Avaliacoes
 -- ================================
-CREATE TABLE notas (
-    id_nota INT AUTO_INCREMENT PRIMARY KEY,
+CREATE TABLE avaliacoes (
+    id_avaliacao INT AUTO_INCREMENT PRIMARY KEY,
     id_aluno INT NOT NULL,
     id_turma INT NOT NULL,
-    nota1 DECIMAL(5,2),
-    nota2 DECIMAL(5,2),
-    media_final DECIMAL(5,2),
-    FOREIGN KEY (id_aluno) REFERENCES usuarios(id_usuario)
-        ON DELETE CASCADE ON UPDATE CASCADE,
-    FOREIGN KEY (id_turma) REFERENCES turmas(id_turma)
-        ON DELETE CASCADE ON UPDATE CASCADE
+    descricao VARCHAR(100),
+    nota DECIMAL(5,2) NOT NULL,
+    data_avaliacao DATE NOT NULL,
+    FOREIGN KEY (id_aluno) REFERENCES usuarios(id_usuario) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY (id_turma) REFERENCES turmas(id_turma) ON DELETE CASCADE ON UPDATE CASCADE
 );
+
