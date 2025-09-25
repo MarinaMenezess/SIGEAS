@@ -21,8 +21,8 @@ router.get('/', authenticateToken, authorizeRoles('administrador'), async (req, 
 
 // GET /api/usuarios/:id/turmas
 router.get('/:id/turmas', authenticateToken, authorizeRoles('administrador'), async (req, res) => {
-    const [rows] = await pool.query('SELECT id_turma FROM professores_turmas WHERE id_professor = ?', [req.params.id]);
-    res.json(rows.map(r => r.id_turma));
+    const [rows] = await pool.query('SELECT id_turma, materia FROM professores_turmas WHERE id_professor = ?', [req.params.id]);
+    res.json(rows);
 });
 
 // POST /api/usuarios
@@ -43,8 +43,8 @@ router.post('/', authenticateToken, authorizeRoles('administrador'), async (req,
     const idUsuario = result.insertId;
 
     if (perfil === 'professor' && turmas && turmas.length > 0) {
-      for (const idTurma of turmas) {
-        await connection.query('INSERT INTO professores_turmas (id_professor, id_turma) VALUES (?, ?)', [idUsuario, idTurma]);
+      for (const t of turmas) {
+        await connection.query('INSERT INTO professores_turmas (id_professor, id_turma, materia) VALUES (?, ?, ?)', [idUsuario, t.id_turma, t.materia]);
       }
     }
 
@@ -81,8 +81,8 @@ router.put('/:id', authenticateToken, authorizeRoles('administrador'), async (re
     if (perfil === 'professor') {
         await connection.query('DELETE FROM professores_turmas WHERE id_professor = ?', [idUsuario]);
         if (turmas && turmas.length > 0) {
-            for (const idTurma of turmas) {
-                await connection.query('INSERT INTO professores_turmas (id_professor, id_turma) VALUES (?, ?)', [idUsuario, idTurma]);
+            for (const t of turmas) {
+                await connection.query('INSERT INTO professores_turmas (id_professor, id_turma, materia) VALUES (?, ?, ?)', [idUsuario, t.id_turma, t.materia]);
             }
         }
     }

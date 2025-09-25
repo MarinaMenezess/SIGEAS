@@ -4,13 +4,13 @@ const pool = require('../db');
 const { authenticateToken, authorizeRoles } = require('../authMiddleware');
 const router = express.Router();
 
-// GET /api/chamadas/turma/:id_turma/data/:data -> Pega a chamada de um dia específico
-router.get('/turma/:id_turma/data/:data', authenticateToken, authorizeRoles('professor'), async (req, res) => {
-    const { id_turma, data } = req.params;
+// GET /api/chamadas/turma/:id_turma/materia/:materia/data/:data -> Pega a chamada de um dia específico para uma materia
+router.get('/turma/:id_turma/materia/:materia/data/:data', authenticateToken, authorizeRoles('professor'), async (req, res) => {
+    const { id_turma, materia, data } = req.params;
     try {
         const [rows] = await pool.query(
-            'SELECT id_aluno, status FROM chamadas WHERE id_turma = ? AND data = ?',
-            [id_turma, data]
+            'SELECT id_aluno, status FROM chamadas WHERE id_turma = ? AND materia = ? AND data = ?',
+            [id_turma, materia, data]
         );
         // Transforma o array em um objeto para fácil acesso no frontend: { id_aluno: status }
         const presencas = rows.reduce((acc, row) => {
@@ -26,30 +26,30 @@ router.get('/turma/:id_turma/data/:data', authenticateToken, authorizeRoles('pro
 
 // POST /api/chamadas -> Registra a chamada para uma turma em um dia
 router.post('/', authenticateToken, authorizeRoles('professor'), async (req, res) => {
-    const { id_turma, data, presencas } = req.body;
+    const { id_turma, materia, data, presencas } = req.body;
     const id_professor = req.user.id_usuario;
 
-    if (!id_turma || !data || !presencas) {
+    if (!id_turma || !materia || !data || !presencas) {
         return res.status(400).json({ error: 'Dados incompletos' });
     }
 
     const connection = await pool.getConnection();
     try {
-        // Verifica se o professor está alocado na turma
-        const [[assigned]] = await connection.query('SELECT 1 FROM professores_turmas WHERE id_professor=? AND id_turma=? LIMIT 1', [id_professor, id_turma]);
+        // Verifica se o professor está alocado na turma para a materia
+        const [[assigned]] = await connection.query('SELECT 1 FROM professores_turmas WHERE id_professor=? AND id_turma=? AND materia=? LIMIT 1', [id_professor, id_turma, materia]);
         if (!assigned) {
             connection.release();
-            return res.status(403).json({ error: 'Professor não alocado nesta turma' });
+            return res.status(403).json({ error: 'Professor não alocado nesta turma ou matéria' });
         }
 
         await connection.beginTransaction();
 
-        // Apaga a chamada antiga para este dia e turma (garante que podemos salvar novamente)
-        await connection.query('DELETE FROM chamadas WHERE id_turma = ? AND data = ?', [id_turma, data]);
+        // Apaga a chamada antiga para este dia, turma e materia (garante que podemos salvar novamente)
+        await connection.query('DELETE FROM chamadas WHERE id_turma = ? AND materia = ? AND data = ?', [id_turma, materia, data]);
 
         // Insere os novos registros de presença
         const inserts = Object.entries(presencas).map(([id_aluno, status]) => {
-            return connection.query('INSERT INTO chamadas (id_aluno, id_turma, data, status) VALUES (?, ?, ?, ?)', [id_aluno, id_turma, data, status]);
+            return connection.query('INSERT INTO chamadas (id_aluno, id_turma, materia, data, status) VALUES (?, ?, ?, ?, ?)', [id_aluno, id_turma, materia, data, status]);
         });
         await Promise.all(inserts);
 
@@ -69,7 +69,7 @@ router.get('/me', authenticateToken, authorizeRoles('aluno'), async (req, res) =
     const id_aluno = req.user.id_usuario;
     try {
         const [rows] = await pool.query(
-            'SELECT data, status FROM chamadas WHERE id_aluno = ? ORDER BY data DESC',
+            `SELECT materia, data, status FROM chamadas WHERE id_aluno = ? ORDER BY data DESC`,
             [id_aluno]
         );
         res.json(rows);

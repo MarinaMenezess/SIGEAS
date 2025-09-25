@@ -331,3 +331,145 @@ li button {
 .btn-excluir-aval:hover {
   color: #843534;
 }
+
+/* Novo estilo para a divisao dos trimestres */
+.trimestre-header {
+  text-align: center;
+  border-bottom: 2px solid #167D7F !important;
+}
+
+.trimestre-divider {
+  border-left: 2px solid #167D7F !important;
+}
+
+/* Estilos para o painel do aluno por matéria */
+.materia-bloco {
+    border: 1px solid #98D7C2;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.materia-bloco h3 {
+    margin-top: 0;
+    margin-bottom: 1rem;
+    color: #29A0B1;
+}
+
+.materia-bloco h4 {
+    margin-bottom: 0.5rem;
+}
+
+.lista-notas-aluno {
+    list-style: none;
+    padding: 0;
+}
+
+.lista-notas-aluno li {
+    border-bottom: none;
+    padding: 0.3rem 0;
+}
+
+.aluno-nav {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.aluno-nav button {
+  background: #98D7C2;
+  color: #167D7F;
+  border: 1px solid #98D7C2;
+}
+
+.aluno-nav button.active {
+  background: #167D7F;
+  color: white;
+}
+
+.painel-aluno {
+    display: none;
+}
+
+.painel-aluno.active {
+    display: block;
+}
+
+.filtros-aluno {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.filtros-aluno select {
+    display: inline-block;
+    width: auto;
+}
+
+/* Estilos para o calendário de faltas */
+.calendario-faltas {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 5px;
+    text-align: center;
+}
+
+.calendario-header {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+.calendario-dias-semana {
+    display: contents;
+    font-weight: bold;
+    color: #29A0B1;
+}
+
+.calendario-dias-semana > div {
+    padding: 5px;
+}
+
+.calendario-dia {
+    padding: 10px;
+    border-radius: 50%;
+    cursor: default;
+    font-size: 1.1rem;
+    background-color: #eee;
+    margin-top: 5px;
+}
+
+.dia-presente {
+    background-color: #4CAF50;
+    color: white;
+}
+
+.dia-falta {
+    background-color: #F44336;
+    color: white;
+}
+
+.dia-inativo {
+    color: #ccc;
+    cursor: default;
+}
+
+.tabela-notas-aluno {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+    background-color: white;
+}
+.tabela-notas-aluno th, .tabela-notas-aluno td {
+    border: 1px solid #98D7C2;
+    padding: 0.8rem;
+    text-align: center;
+}
+.tabela-notas-aluno th {
+    background-color: #f2f2f2;
+    font-weight: 600;
+}

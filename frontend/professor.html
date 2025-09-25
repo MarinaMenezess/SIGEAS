@@ -10,32 +10,40 @@
   <div class="container">
     <h1>Painel do Professor</h1>
     
-    <h2>Minhas Turmas</h2>
-    <ul id="listaTurmasProfessor">
-      <li>Carregando turmas...</li>
-    </ul>
+    <section id="listagem">
+      <h2>Minhas Turmas e Matérias</h2>
+      <ul id="listaTurmasProfessor">
+        <li>Carregando turmas...</li>
+      </ul>
+    </section>
 
     <section id="detalhesTurma" class="painel hidden" style="margin-top: 2rem;">
+      <button onclick="fecharDetalhesTurma()">Voltar para Turmas</button>
       <h2 id="nomeTurmaSelecionada"></h2>
-      <div id="acoesTurma" class="hidden" style="margin-bottom: 1.5rem; display: flex; gap: 1rem;">
-          <button id="btnVerFaltas">Ver Faltas</button>
-          <button id="btnFazerChamada">Fazer Chamada</button>
-          <button id="btnLancarNotas">Lançar Notas</button>
-      </div>
-      <div id="conteudoTurma">
-          <ul id="listaAlunosResumo" class="hidden"></ul>
-          <form id="formChamada" class="hidden">
-              <div style="margin-bottom: 1rem;">
-                <label for="dataChamada">Data da Chamada:</label>
-                <input type="date" id="dataChamada" required>
-              </div>
-              <h3>Alunos Matriculados</h3>
-              <ul id="listaAlunosChamada"></ul>
-              <button type="submit">Salvar Chamada</button>
-          </form>
-          
-          <div id="conteudoNotas" class="hidden"></div>
-      </div>
+      <ul id="listaMateriasProfessor"></ul>
+    </section>
+
+    <section id="detalhesMateria" class="painel hidden" style="margin-top: 2rem;">
+        <button onclick="fecharDetalhesMateria()">Voltar para Matérias</button>
+        <h2 id="nomeMateriaSelecionada"></h2>
+        <div id="acoesMateria" style="margin-bottom: 1.5rem; display: flex; gap: 1rem;">
+            <button id="btnVerFaltas">Ver Faltas</button>
+            <button id="btnFazerChamada">Fazer Chamada</button>
+            <button id="btnLancarNotas">Lançar Notas</button>
+        </div>
+        <div id="conteudoMateria">
+            <ul id="listaAlunosResumo" class="hidden"></ul>
+            <form id="formChamada" class="hidden">
+                <div style="margin-bottom: 1rem;">
+                  <label for="dataChamada">Data da Chamada:</label>
+                  <input type="date" id="dataChamada" required>
+                </div>
+                <h3>Alunos Matriculados</h3>
+                <ul id="listaAlunosChamada"></ul>
+                <button type="submit">Salvar Chamada</button>
+            </form>
+            <div id="conteudoNotas" class="hidden"></div>
+        </div>
     </section>
 
     <button onclick="logout()" style="margin-top: 2rem;">Sair</button>

@@ -11,12 +11,35 @@
     <h1>Painel do Aluno</h1>
     <h2>Minha Turma</h2>
     <p id="turmaAluno">Carregando...</p>
+    
+    <nav class="aluno-nav">
+      <button onclick="mostrarSecaoAluno('notas')" class="active">Notas</button>
+      <button onclick="mostrarSecaoAluno('faltas')">Faltas</button>
+    </nav>
 
-    <h2>Presenças</h2>
-    <ul id="presencasAluno"><li>Carregando...</li></ul>
+    <section id="secaoNotas" class="painel-aluno">
+      <h2>Minhas Notas</h2>
+      <div class="filtros-aluno">
+        <label for="filtroMateriaNotas">Matéria:</label>
+        <select id="filtroMateriaNotas" onchange="renderizarNotasAluno()"></select>
+        <label for="filtroTrimestreNotas">Trimestre:</label>
+        <select id="filtroTrimestreNotas" onchange="renderizarNotasAluno()"></select>
+      </div>
+      <div id="conteudoNotasAluno">
+        <p>Carregando notas...</p>
+      </div>
+    </section>
 
-    <h2>Notas</h2>
-    <ul id="notasAluno"><li>Carregando...</li></ul>
+    <section id="secaoFaltas" class="painel-aluno hidden">
+      <h2>Minhas Faltas</h2>
+      <div class="filtros-aluno">
+        <label for="filtroMateriaFaltas">Matéria:</label>
+        <select id="filtroMateriaFaltas" onchange="renderizarFaltasAluno()"></select>
+      </div>
+      <div id="conteudoFaltasAluno">
+        <p>Carregando faltas...</p>
+      </div>
+    </section>
 
     <button onclick="logout()" style="margin-top: 2rem;">Sair</button>
   </div>

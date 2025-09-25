@@ -75,7 +75,7 @@ CREATE TABLE avaliacoes (
     descricao VARCHAR(100),
     nota DECIMAL(5,2) NOT NULL,
     data_avaliacao DATE NOT NULL,
+    trimestre INT NOT NULL, -- Coluna 'trimestre' adicionada aqui
     FOREIGN KEY (id_aluno) REFERENCES usuarios(id_usuario) ON DELETE CASCADE ON UPDATE CASCADE,
     FOREIGN KEY (id_turma) REFERENCES turmas(id_turma) ON DELETE CASCADE ON UPDATE CASCADE
 );
-

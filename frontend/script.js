@@ -3,6 +3,10 @@
 // ===============================
 
 const API_URL = "http://localhost:4000/api";
+let alunosComNotasCache = [];
+let turmaSelecionadaGlobal = { id: null, nome: '' };
+let materiaSelecionadaGlobal = null;
+let dadosAlunoCache = { notas: [], presencas: [] };
 
 document.addEventListener('DOMContentLoaded', () => {
     if (document.body.id === 'page-admin') {
@@ -64,6 +68,7 @@ function fecharModal() {
 
 function fecharModalNotas() {
     if (notasModal) notasModal.style.display = 'none';
+    verAlunosParaNotas(); // Recarrega a tabela para garantir que as notas foram atualizadas
 }
 
 async function abrirModalTurma(turma = null) {
@@ -110,9 +115,11 @@ async function abrirModalUsuario(perfil, usuario = null) {
     const modalFormFields = document.getElementById('modal-form-fields');
     
     modalTitle.textContent = usuario ? `Editar ${perfil}` : `Criar Novo ${perfil}`;
+    const materias = ['matematica', 'portugues', 'artes', 'educacao fisica', 'ingles', 'geografia', 'sociologia', 'filosofia', 'historia', 'biologia', 'fisica', 'quimica', 'projeto de vida', 'projeto profissional'];
     let extraFieldsHTML = '';
     if (perfil === 'professor') {
-        extraFieldsHTML = `<label>Associar Turmas</label><div class="multi-select-container"><div id="tags-container"></div><select id="turmas-select"><option value="">Adicionar turma...</option></select></div>`;
+        const turmas = await (await apiFetch('/turmas')).json();
+        extraFieldsHTML = `<label>Associar Turmas e Matérias</label><div class="multi-select-container"><div id="tags-container"></div><select id="turmas-select"><option value="">Adicionar turma...</option>${turmas.map(t => `<option value="${t.id_turma}">${t.nome}</option>`).join('')}</select> <select id="materias-select"><option value="">Selecione a matéria...</option>${materias.map(m => `<option value="${m}">${m.charAt(0).toUpperCase() + m.slice(1)}</option>`).join('')}</select> <button type="button" onclick="adicionarMateriaProfessor()">Adicionar</button></div>`;
     } else if (perfil === 'aluno') {
         const turmas = await (await apiFetch('/turmas')).json();
         const idTurmaAtual = usuario ? usuario.id_turma : null;
@@ -121,18 +128,15 @@ async function abrirModalUsuario(perfil, usuario = null) {
     modalFormFields.innerHTML = `<label for="nome">Nome</label><input type="text" id="nome" name="nome" value="${usuario?.nome || ''}" required><label for="email">Email</label><input type="email" id="email" name="email" value="${usuario?.email || ''}" required><label for="senha">Senha</label><input type="password" id="senha" name="senha" placeholder="${usuario ? 'Deixe em branco para não alterar' : 'Senha temporária'}">${extraFieldsHTML}`;
     adminModal.style.display = 'flex';
     if (perfil === 'professor' && usuario) {
-        const [todasTurmas, turmasAtuaisIds] = await Promise.all([
-            (await apiFetch('/turmas')).json(),
-            (await apiFetch(`/usuarios/${usuario.id_usuario}/turmas`)).json()
-        ]);
-        setTimeout(() => popularMultiSelect(todasTurmas, turmasAtuaisIds), 0);
+        const turmasAtuais = await (await apiFetch(`/usuarios/${usuario.id_usuario}/turmas`)).json();
+        setTimeout(() => popularMultiSelect(turmasAtuais), 0);
     }
     modalForm.onsubmit = async (event) => {
         event.preventDefault();
         const data = Object.fromEntries(new FormData(modalForm).entries());
         data.perfil = perfil;
         if (perfil === 'professor') {
-            data.turmas = Array.from(document.querySelectorAll('#tags-container .tag-item')).map(tag => tag.dataset.value);
+            data.turmas = Array.from(document.querySelectorAll('#tags-container .tag-item')).map(tag => ({ id_turma: tag.dataset.turma, materia: tag.dataset.materia }));
         }
         if (usuario && !data.senha) delete data.senha;
         if (usuario) {
@@ -147,49 +151,39 @@ async function abrirModalUsuario(perfil, usuario = null) {
     };
 }
 
-function popularMultiSelect(todasTurmas, turmasAtuaisIds) {
-    const tagsContainer = document.getElementById('tags-container');
+function adicionarMateriaProfessor() {
     const turmaSelect = document.getElementById('turmas-select');
-    if (!tagsContainer || !turmaSelect) return;
+    const materiaSelect = document.getElementById('materias-select');
+    const tagsContainer = document.getElementById('tags-container');
+
+    const idTurma = turmaSelect.value;
+    const nomeTurma = turmaSelect.options[turmaSelect.selectedIndex].text;
+    const materia = materiaSelect.value;
+    const nomeMateria = materiaSelect.options[materiaSelect.selectedIndex].text;
+
+    if (idTurma && materia) {
+        const tag = document.createElement('div');
+        tag.className = 'tag-item';
+        tag.dataset.turma = idTurma;
+        tag.dataset.materia = materia;
+        tag.innerHTML = `<span>${nomeTurma} - ${nomeMateria}</span><span class="remove-tag" onclick="this.parentElement.remove()">&times;</span>`;
+        tagsContainer.appendChild(tag);
+        turmaSelect.value = "";
+        materiaSelect.value = "";
+    }
+}
+
+function popularMultiSelect(turmasAtuais) {
+    const tagsContainer = document.getElementById('tags-container');
     tagsContainer.innerHTML = '';
-    turmaSelect.innerHTML = '<option value="">Adicionar turma...</option>';
-    const turmasSelecionadas = new Set(turmasAtuaisIds.map(String));
-    todasTurmas.forEach(turma => {
-        if (turmasSelecionadas.has(String(turma.id_turma))) {
-            criarTag(turma);
-        } else {
-            const option = document.createElement('option');
-            option.value = turma.id_turma;
-            option.textContent = turma.nome;
-            turmaSelect.appendChild(option);
-        }
+    turmasAtuais.forEach(turma => {
+        const tag = document.createElement('div');
+        tag.className = 'tag-item';
+        tag.dataset.turma = turma.id_turma;
+        tag.dataset.materia = turma.materia;
+        tag.innerHTML = `<span>Turma ${turma.id_turma} - ${turma.materia}</span><span class="remove-tag" onclick="this.parentElement.remove()">&times;</span>`;
+        tagsContainer.appendChild(tag);
     });
-    turmaSelect.onchange = (e) => {
-        const id = e.target.value;
-        if (!id) return;
-        const turma = todasTurmas.find(t => String(t.id_turma) === id);
-        criarTag(turma);
-        e.target.querySelector(`option[value='${id}']`).remove();
-        e.target.value = '';
-    };
-}
-
-function criarTag(turma) {
-    const tagsContainer = document.getElementById('tags-container');
-    const tag = document.createElement('div');
-    tag.className = 'tag-item';
-    tag.dataset.value = turma.id_turma;
-    tag.innerHTML = `<span>${turma.nome}</span><span class="remove-tag" onclick="removerTag(this, ${JSON.stringify(turma).replace(/"/g, "'")})">&times;</span>`;
-    tagsContainer.appendChild(tag);
-}
-
-function removerTag(element, turma) {
-    const turmaSelect = document.getElementById('turmas-select');
-    const option = document.createElement('option');
-    option.value = turma.id_turma;
-    option.textContent = turma.nome;
-    turmaSelect.appendChild(option);
-    element.parentElement.remove();
 }
 
 // ===============================
@@ -227,17 +221,25 @@ async function carregarUsuarios(perfil) {
 // LÓGICA PARA O PAINEL DO PROFESSOR
 // ===============================
 
-let turmaSelecionadaGlobal = { id: null, nome: '' };
-
 async function carregarDadosProfessor() {
     try {
         const turmas = await (await apiFetch('/turmas')).json();
         const listaTurmasProfessor = document.getElementById("listaTurmasProfessor");
-        if (turmas.length > 0) {
-            listaTurmasProfessor.innerHTML = turmas.map(turma => `
+        const turmasAgrupadas = turmas.reduce((acc, t) => {
+            if (!acc[t.id_turma]) {
+                acc[t.id_turma] = { id_turma: t.id_turma, nome: t.nome, ano: t.ano, materias: [] };
+            }
+            if (t.materia) {
+                acc[t.id_turma].materias.push(t.materia);
+            }
+            return acc;
+        }, {});
+
+        if (Object.keys(turmasAgrupadas).length > 0) {
+            listaTurmasProfessor.innerHTML = Object.values(turmasAgrupadas).map(turma => `
                 <li class="turma-item">
                     <span>${turma.nome} (${turma.ano})</span>
-                    <button onclick="selecionarTurma(${turma.id_turma}, '${turma.nome.replace(/'/g, "\\'")}')">Gerenciar Turma</button>
+                    <button onclick="selecionarTurma(${turma.id_turma}, '${turma.nome.replace(/'/g, "\\'")}', [${turma.materias.map(m => `'${m}'`).join(',')}])">Gerenciar</button>
                 </li>`).join('');
         } else {
             listaTurmasProfessor.innerHTML = '<li>Você não está associado a nenhuma turma.</li>';
@@ -248,37 +250,72 @@ async function carregarDadosProfessor() {
     }
 }
 
-function selecionarTurma(id_turma, nome_turma) {
+function selecionarTurma(id_turma, nome_turma, materias) {
     turmaSelecionadaGlobal = { id: id_turma, nome: nome_turma };
     
+    document.getElementById('listagem').classList.add('hidden');
     document.getElementById('detalhesTurma').classList.remove('hidden');
-    document.getElementById('acoesTurma').classList.remove('hidden');
-    document.getElementById('nomeTurmaSelecionada').textContent = `Gerenciando a Turma: ${nome_turma}`;
+    document.getElementById('nomeTurmaSelecionada').textContent = `Turma: ${nome_turma}`;
 
-    document.getElementById('btnVerFaltas').onclick = () => verResumoDaTurma();
-    document.getElementById('btnFazerChamada').onclick = () => verAlunosParaChamada();
-    document.getElementById('btnLancarNotas').onclick = () => verAlunosParaNotas();
-
-    verResumoDaTurma();
+    const listaMaterias = document.getElementById('listaMateriasProfessor');
+    listaMaterias.innerHTML = materias.map(materia => `
+        <li>
+            <span>${materia.charAt(0).toUpperCase() + materia.slice(1)}</span>
+            <button onclick="selecionarMateria('${materia}')">Gerenciar Matéria</button>
+        </li>
+    `).join('');
 }
 
-function esconderConteudosTurma() {
+function fecharDetalhesTurma() {
+    document.getElementById('listagem').classList.remove('hidden');
+    document.getElementById('detalhesTurma').classList.add('hidden');
+    document.getElementById('detalhesMateria').classList.add('hidden');
+}
+
+function selecionarMateria(materia) {
+    materiaSelecionadaGlobal = materia;
+    document.getElementById('detalhesTurma').classList.add('hidden');
+    document.getElementById('detalhesMateria').classList.remove('hidden');
+    document.getElementById('nomeMateriaSelecionada').textContent = `Matéria: ${materia.charAt(0).toUpperCase() + materia.slice(1)}`;
+
+    document.getElementById('btnVerFaltas').onclick = () => verResumoDaMateria();
+    document.getElementById('btnFazerChamada').onclick = () => verAlunosParaChamada();
+    document.getElementById('btnLancarNotas').onclick = () => verAlunosParaNotas();
+    
+    verResumoDaMateria();
+}
+
+function fecharDetalhesMateria() {
+    document.getElementById('detalhesMateria').classList.add('hidden');
+    document.getElementById('detalhesTurma').classList.remove('hidden');
+}
+
+function esconderConteudosMateria() {
     document.getElementById('listaAlunosResumo').classList.add('hidden');
     document.getElementById('formChamada').classList.add('hidden');
     document.getElementById('conteudoNotas').classList.add('hidden');
 }
 
-async function verResumoDaTurma() {
-    esconderConteudosTurma();
+async function verResumoDaMateria() {
+    esconderConteudosMateria();
     const { id: id_turma } = turmaSelecionadaGlobal;
     const listaAlunosResumoEl = document.getElementById('listaAlunosResumo');
     listaAlunosResumoEl.classList.remove('hidden');
     listaAlunosResumoEl.innerHTML = '<li>Carregando resumo de faltas...</li>';
 
     try {
-        const alunosComFaltas = await (await apiFetch(`/turmas/${id_turma}/alunos/faltas`)).json();
-        if (alunosComFaltas.length > 0) {
-            listaAlunosResumoEl.innerHTML = alunosComFaltas.map(aluno => `<li class="chamada-item"><span>${aluno.nome}</span><span style="font-weight: bold;">Faltas: ${aluno.total_faltas}</span></li>`).join('');
+        const alunos = await (await apiFetch(`/turmas/${id_turma}/alunos`)).json();
+        const faltasPorMateria = await (await apiFetch(`/turmas/${id_turma}/alunos/faltas`)).json();
+
+        const faltasMap = faltasPorMateria.reduce((acc, aluno) => {
+            if (aluno.materia === materiaSelecionadaGlobal) {
+                acc[aluno.id_usuario] = aluno.total_faltas;
+            }
+            return acc;
+        }, {});
+
+        if (alunos.length > 0) {
+            listaAlunosResumoEl.innerHTML = alunos.map(aluno => `<li class="chamada-item"><span>${aluno.nome}</span><span style="font-weight: bold;">Faltas: ${faltasMap[aluno.id_usuario] || 0}</span></li>`).join('');
         } else {
             listaAlunosResumoEl.innerHTML = '<li>Nenhum aluno matriculado nesta turma.</li>';
         }
@@ -289,7 +326,7 @@ async function verResumoDaTurma() {
 }
 
 async function verAlunosParaChamada() {
-    esconderConteudosTurma();
+    esconderConteudosMateria();
     const { id: id_turma } = turmaSelecionadaGlobal;
     const listaAlunosChamadaEl = document.getElementById('listaAlunosChamada');
     const dataChamadaEl = document.getElementById('dataChamada');
@@ -309,7 +346,7 @@ async function verAlunosParaChamada() {
         }
         listaAlunosChamadaEl.innerHTML = alunos.map(aluno => `<li class="chamada-item"><span>${aluno.nome}</span><div class="chamada-options"><input type="radio" id="presente_${aluno.id_usuario}" name="aluno_${aluno.id_usuario}" value="presente" checked> <label for="presente_${aluno.id_usuario}">Presente</label><input type="radio" id="falta_${aluno.id_usuario}" name="aluno_${aluno.id_usuario}" value="falta"> <label for="falta_${aluno.id_usuario}">Falta</label></div></li>`).join('');
         try {
-            const presencasDoDia = await (await apiFetch(`/chamadas/turma/${id_turma}/data/${hoje}`)).json();
+            const presencasDoDia = await (await apiFetch(`/chamadas/turma/${id_turma}/materia/${materiaSelecionadaGlobal}/data/${hoje}`)).json();
             for (const id_aluno in presencasDoDia) {
                 const status = presencasDoDia[id_aluno];
                 const radio = document.querySelector(`input[name="aluno_${id_aluno}"][value="${status}"]`);
@@ -334,12 +371,12 @@ async function salvarChamada(event, id_turma) {
         const id_aluno = radio.name.replace('aluno_', '');
         presencas[id_aluno] = radio.value;
     });
-    const payload = { id_turma, data, presencas };
+    const payload = { id_turma, materia: materiaSelecionadaGlobal, data, presencas };
     try {
         const response = await apiFetch('/chamadas', 'POST', payload);
         if(response.ok) {
             alert('✅ Chamada salva com sucesso!');
-            verResumoDaTurma();
+            verResumoDaMateria();
         } else {
             const err = await response.json();
             alert(`❌ Erro ao salvar chamada: ${err.error}`);
@@ -350,28 +387,50 @@ async function salvarChamada(event, id_turma) {
     }
 }
 
-// Nova função para renderizar a tabela de notas na página
+function calcularMedia(notas) {
+    if (notas.length === 0) return null;
+    const notasNumericas = notas.filter(nota => !isNaN(parseFloat(nota))).map(nota => parseFloat(nota));
+    if (notasNumericas.length === 0) return null;
+    const total = notasNumericas.reduce((sum, nota) => sum + nota, 0);
+    return total / notasNumericas.length;
+}
+
 async function verAlunosParaNotas() {
-    esconderConteudosTurma();
-    const { id: id_turma, nome: nome_turma } = turmaSelecionadaGlobal;
+    esconderConteudosMateria();
+    const { id: id_turma } = turmaSelecionadaGlobal;
     const notasContainer = document.getElementById('conteudoNotas');
     notasContainer.classList.remove('hidden');
     notasContainer.innerHTML = '<li>Carregando notas...</li>';
     
     try {
-        const alunosComNotas = await (await apiFetch(`/notas/turma/${id_turma}`)).json();
-        
+        const alunosComNotas = await (await apiFetch(`/notas/turma/${id_turma}/materia/${materiaSelecionadaGlobal}`)).json();
+        alunosComNotasCache = alunosComNotas;
+
         if (alunosComNotas.length === 0) {
             notasContainer.innerHTML = "<p>Nenhum aluno encontrado nesta turma.</p>";
             return;
         }
 
-        const avaliacoesUnicas = Array.from(new Set(alunosComNotas.flatMap(a => a.avaliacoes.map(av => ({
-            descricao: av.descricao,
-            trimestre: av.trimestre,
-            id: av.id_avaliacao
-        })))));
+        const avaliacoesSet = new Set();
+        alunosComNotas.flatMap(a => a.avaliacoes).forEach(aval => {
+            const key = `${aval.descricao}-${aval.trimestre}`;
+            avaliacoesSet.add(JSON.stringify({
+                descricao: aval.descricao,
+                trimestre: aval.trimestre
+            }));
+        });
+        const avaliacoesUnicas = Array.from(avaliacoesSet).map(s => JSON.parse(s));
+
+        const avaliacoesPorTrimestre = {};
+        avaliacoesUnicas.forEach(av => {
+            if (!avaliacoesPorTrimestre[av.trimestre]) {
+                avaliacoesPorTrimestre[av.trimestre] = [];
+            }
+            avaliacoesPorTrimestre[av.trimestre].push(av);
+        });
         
+        const trimestresOrdenados = Object.keys(avaliacoesPorTrimestre).sort();
+
         let tabelaHTML = `
             <div id="controles-tabela">
                 <button onclick="abrirModalAddAvaliacao()">Adicionar Avaliação</button>
@@ -387,21 +446,40 @@ async function verAlunosParaNotas() {
                 <table id="tabelaNotas">
                     <thead>
                         <tr>
-                            <th>Aluno</th>
-                            ${avaliacoesUnicas.map(av => `<th class="nota-header" data-trimestre="${av.trimestre}">${av.descricao} <button class="btn-excluir-aval" data-desc="${av.descricao}">&times;</button></th>`).join('')}
-                            <th>Média Final</th>
+                            <th rowspan="2">Aluno</th>
+                            ${trimestresOrdenados.map(trimestre => {
+                                const avs = avaliacoesPorTrimestre[trimestre];
+                                return `<th colspan="${avs.length}" class="trimestre-header">${trimestre}º Trimestre</th>`;
+                            }).join('')}
+                            <th rowspan="2">Média Final</th>
+                        </tr>
+                        <tr>
+                            ${trimestresOrdenados.map(trimestre => {
+                                const avs = avaliacoesPorTrimestre[trimestre];
+                                return avs.map((av, index) => {
+                                    const isFirstInTrimestre = index === 0;
+                                    const dividerClass = isFirstInTrimestre ? 'trimestre-divider' : '';
+                                    return `<th class="nota-header ${dividerClass}" data-trimestre="${av.trimestre}">${av.descricao} <button class="btn-excluir-aval" data-desc="${av.descricao}">&times;</button></th>`;
+                                }).join('');
+                            }).join('')}
                         </tr>
                     </thead>
                     <tbody>
                         ${alunosComNotas.map(aluno => `
                             <tr>
                                 <td>${aluno.nome}</td>
-                                ${avaliacoesUnicas.map(av => {
-                                    const nota = aluno.avaliacoes.find(alunoAv => alunoAv.descricao === av.descricao)?.nota || '---';
-                                    const avaliacaoID = aluno.avaliacoes.find(alunoAv => alunoAv.descricao === av.descricao)?.id_avaliacao || null;
-                                    return `<td data-id="${avaliacaoID}">${nota}</td>`;
+                                ${trimestresOrdenados.map(trimestre => {
+                                    const avaliacoesDoTrimestre = avaliacoesPorTrimestre[trimestre] || [];
+                                    return avaliacoesDoTrimestre.map((avUnica, index) => {
+                                        const nota = aluno.avaliacoes.find(alunoAv => 
+                                            alunoAv.descricao === avUnica.descricao && alunoAv.trimestre == avUnica.trimestre
+                                        )?.nota || '---';
+                                        const isFirstInTrimestre = index === 0;
+                                        const dividerClass = isFirstInTrimestre ? 'trimestre-divider' : '';
+                                        return `<td class="${dividerClass}" data-trimestre="${avUnica.trimestre}">${nota}</td>`;
+                                    }).join('');
                                 }).join('')}
-                                <td>${aluno.media_final !== null ? aluno.media_final.toFixed(2) : '---'}</td>
+                                <td class="media-final">${aluno.media_final !== null ? aluno.media_final.toFixed(2) : '---'}</td>
                             </tr>
                         `).join('')}
                     </tbody>
@@ -411,17 +489,15 @@ async function verAlunosParaNotas() {
         
         notasContainer.innerHTML = tabelaHTML;
 
-        // Adiciona os eventos de clique para os botões de filtro
         document.querySelectorAll('.btn-trimestre').forEach(btn => {
-            btn.addEventListener('click', () => {
+            btn.addEventListener('click', (event) => {
                 document.querySelectorAll('.btn-trimestre').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
-                const trimestre = btn.dataset.trimestre;
+                const trimestre = event.target.dataset.trimestre;
                 filtrarTabelaPorTrimestre(trimestre);
             });
         });
         
-        // Adiciona o evento de clique para os botões de exclusão de avaliação
         document.querySelectorAll('.btn-excluir-aval').forEach(btn => {
             btn.addEventListener('click', () => {
                 const descricao = btn.dataset.desc;
@@ -435,13 +511,65 @@ async function verAlunosParaNotas() {
     }
 }
 
-// Abre o modal APENAS para adicionar uma nova avaliação
+function filtrarTabelaPorTrimestre(trimestre) {
+    const tabela = document.getElementById('tabelaNotas');
+    if (!tabela) return;
+
+    const headers = tabela.querySelectorAll('th.nota-header');
+    const trimestreHeaders = tabela.querySelectorAll('th.trimestre-header');
+    const rows = tabela.querySelectorAll('tbody tr');
+    
+    headers.forEach(header => {
+        const headerTrimestre = header.dataset.trimestre;
+        if (trimestre === 'todos' || headerTrimestre === trimestre) {
+            header.style.display = '';
+        } else {
+            header.style.display = 'none';
+        }
+    });
+
+    trimestreHeaders.forEach(header => {
+        const currentTrimestre = header.textContent.split('º')[0];
+        if (trimestre === 'todos' || currentTrimestre === trimestre) {
+            header.style.display = '';
+            const visibleNotesCount = Array.from(headers).filter(h => h.dataset.trimestre === currentTrimestre && h.style.display !== 'none').length;
+            header.setAttribute('colspan', visibleNotesCount);
+        } else {
+            header.style.display = 'none';
+        }
+    });
+
+    rows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        const notasDoTrimestre = [];
+        
+        for (let i = 1; i < cells.length - 1; i++) {
+            const header = headers[i - 1];
+            const notaCell = cells[i];
+
+            if (header.style.display === 'none') {
+                notaCell.style.display = 'none';
+            } else {
+                notaCell.style.display = '';
+                const nota = notaCell.textContent.trim();
+                if (nota !== '---') {
+                    notasDoTrimestre.push(nota);
+                }
+            }
+        }
+        
+        const mediaFinalCell = row.querySelector('.media-final');
+        const novaMedia = calcularMedia(notasDoTrimestre);
+        mediaFinalCell.textContent = novaMedia !== null ? novaMedia.toFixed(2) : '---';
+    });
+}
+
 async function abrirModalAddAvaliacao() {
-    const { id: id_turma, nome: nome_turma } = turmaSelecionadaGlobal;
+    const { id: id_turma } = turmaSelecionadaGlobal;
     const modalTitulo = document.getElementById('modal-notas-titulo');
     const modalCorpo = document.getElementById('modal-notas-corpo');
 
-    modalTitulo.textContent = `Nova Avaliação para ${nome_turma}`;
+    modalTitulo.textContent = `Nova Avaliação para ${materiaSelecionadaGlobal.charAt(0).toUpperCase() + materiaSelecionadaGlobal.slice(1)}`;
     modalCorpo.innerHTML = `<p>Carregando alunos...</p>`;
     notasModal.style.display = 'flex';
 
@@ -463,7 +591,7 @@ async function abrirModalAddAvaliacao() {
                     <option value="2">2º Trimestre</option>
                     <option value="3">3º Trimestre</option>
                 </select>
-                <div class="tabela-notas-container">
+                <div class="tabela-lancar-notas-container">
                     <table class="tabela-lancar-notas">
                         <thead><tr><th>Aluno</th><th>Nota</th></tr></thead>
                         <tbody>
@@ -493,13 +621,12 @@ async function abrirModalAddAvaliacao() {
                 notas.push({ id_aluno: parseInt(id_aluno), nota: parseFloat(input.value) });
             });
             
-            const payload = { id_turma, descricao, trimestre, notas };
+            const payload = { id_turma, materia: materiaSelecionadaGlobal, descricao, trimestre, notas };
             
             const response = await apiFetch('/notas/lancar-em-lote', 'POST', payload);
             if (response.ok) {
                 alert('✅ Avaliação lançada com sucesso!');
                 fecharModalNotas();
-                verAlunosParaNotas(); // Recarrega a tabela na página
             } else {
                 alert('❌ Erro ao lançar avaliação.');
             }
@@ -510,14 +637,13 @@ async function abrirModalAddAvaliacao() {
     }
 }
 
-// Nova função para excluir uma avaliação por descrição e turma
 async function excluirAvaliacaoPorDescricao(descricao, id_turma) {
     if (!confirm(`Tem certeza que deseja excluir todas as notas da avaliação "${descricao}" desta turma?`)) {
         return;
     }
 
     try {
-        const alunosComNotas = await (await apiFetch(`/notas/turma/${id_turma}`)).json();
+        const alunosComNotas = await (await apiFetch(`/notas/turma/${id_turma}/materia/${materiaSelecionadaGlobal}`)).json();
         const avaliacoesParaExcluir = alunosComNotas.flatMap(aluno => aluno.avaliacoes)
                                                    .filter(av => av.descricao === descricao)
                                                    .map(av => av.id_avaliacao);
@@ -525,7 +651,7 @@ async function excluirAvaliacaoPorDescricao(descricao, id_turma) {
         if (avaliacoesParaExcluir.length > 0) {
             await Promise.all(avaliacoesParaExcluir.map(id => apiFetch(`/notas/${id}`, 'DELETE')));
             alert('✅ Avaliações excluídas com sucesso!');
-            verAlunosParaNotas(); // Recarrega a tabela
+            verAlunosParaNotas();
         } else {
             alert('Nenhuma avaliação encontrada com essa descrição.');
         }
@@ -536,80 +662,310 @@ async function excluirAvaliacaoPorDescricao(descricao, id_turma) {
     }
 }
 
-// Função de filtragem (lógica no frontend)
-function filtrarTabelaPorTrimestre(trimestre) {
-    const tabela = document.getElementById('tabelaNotas');
-    if (!tabela) return;
-
-    const headers = tabela.querySelectorAll('th.nota-header');
-    const rows = tabela.querySelectorAll('tbody tr');
-    
-    headers.forEach(header => {
-        const headerTrimestre = header.dataset.trimestre;
-        if (trimestre === 'todos' || headerTrimestre === trimestre) {
-            header.style.display = '';
-        } else {
-            header.style.display = 'none';
-        }
-    });
-
-    rows.forEach(row => {
-        const cells = row.querySelectorAll('td');
-        // Exibe/esconde as células correspondentes ao cabeçalho
-        for (let i = 1; i < cells.length - 1; i++) { // Ignora a primeira e a última célula (aluno e média)
-            const header = headers[i - 1];
-            if (header.style.display === 'none') {
-                cells[i].style.display = 'none';
-            } else {
-                cells[i].style.display = '';
-            }
-        }
-    });
-}
-
 // ===============================
 // LÓGICA PARA O PAINEL DO ALUNO
 // ===============================
+
+let dadosCompletosAluno = { notas: [], presencas: [] };
+
 async function carregarDadosAluno() {
     const turmaEl = document.getElementById('turmaAluno');
-    const presencasEl = document.getElementById('presencasAluno');
-    const notasEl = document.getElementById('notasAluno');
+    
     try {
         const [turmas, presencas, notas] = await Promise.all([
             (await apiFetch('/turmas')).json(),
             (await apiFetch('/chamadas/me')).json(),
             (await apiFetch('/notas/me')).json()
         ]);
+        
         if (turmas.length > 0) {
             turmaEl.textContent = `${turmas[0].nome} (${turmas[0].ano})`;
         } else {
             turmaEl.textContent = 'Você não está matriculado em nenhuma turma.';
         }
-        if (presencas.length > 0) {
-            presencasEl.innerHTML = presencas.map(p => {
-                const dataFormatada = new Date(p.data).toLocaleDateString('pt-BR', {timeZone: 'UTC'});
-                const statusClasse = p.status === 'presente' ? 'status-presente' : 'status-falta';
-                return `<li>${dataFormatada} - <span class="${statusClasse}">${p.status.charAt(0).toUpperCase() + p.status.slice(1)}</span></li>`;
-            }).join('');
-        } else {
-            presencasEl.innerHTML = '<li>Nenhum registro de presença encontrado.</li>';
-        }
-        if (notas.length > 0) {
-            notasEl.innerHTML = notas.map(n => `<li>${n.descricao}: <strong>${n.nota}</strong></li>`).join('');
-        } else {
-            notasEl.innerHTML = '<li>Nenhum registro de nota encontrado.</li>';
-        }
+
+        dadosCompletosAluno.notas = notas;
+        dadosCompletosAluno.presencas = presencas;
+
+        const materiasUnicas = new Set(dadosCompletosAluno.notas.map(n => n.materia).concat(dadosCompletosAluno.presencas.map(p => p.materia)));
+        const materiasDisponiveis = ['todos', ...Array.from(materiasUnicas)].map(m => `<option value="${m}">${m.charAt(0).toUpperCase() + m.slice(1)}</option>`).join('');
+        
+        document.getElementById('filtroMateriaNotas').innerHTML = materiasDisponiveis;
+        document.getElementById('filtroMateriaFaltas').innerHTML = materiasDisponiveis;
+        
+        const trimestresUnicos = new Set(dadosCompletosAluno.notas.map(n => n.trimestre).filter(t => t !== null));
+        const trimestresDisponiveis = ['todos', ...Array.from(trimestresUnicos).sort()].map(t => `<option value="${t}">${t === 'todos' ? 'Todos' : t + 'º Trimestre'}</option>`).join('');
+        
+        document.getElementById('filtroTrimestreNotas').innerHTML = trimestresDisponiveis;
+        
+        mostrarSecaoAluno('notas');
+        
     } catch (e) {
         console.error(e);
         turmaEl.textContent = 'Erro ao carregar dados.';
-        presencasEl.innerHTML = '<li>Erro ao carregar dados.</li>';
-        notasEl.innerHTML = '<li>Erro ao carregar dados.</li>';
+        document.getElementById('conteudoNotasAluno').innerHTML = '<p>Erro ao carregar notas.</p>';
+        document.getElementById('conteudoFaltasAluno').innerHTML = '<p>Erro ao carregar faltas.</p>';
     }
 }
 
+function mostrarSecaoAluno(secao) {
+    document.querySelectorAll('.painel-aluno').forEach(s => s.classList.add('hidden'));
+    document.getElementById(`secao${secao.charAt(0).toUpperCase() + secao.slice(1)}`).classList.remove('hidden');
+
+    document.querySelectorAll('.aluno-nav button').forEach(btn => btn.classList.remove('active'));
+    document.querySelector(`.aluno-nav button[onclick="mostrarSecaoAluno('${secao}')"]`).classList.add('active');
+
+    if (secao === 'notas') {
+        renderizarNotasAluno();
+    } else {
+        renderizarFaltasAluno();
+    }
+}
+
+function renderizarNotasAluno() {
+    const conteudoNotas = document.getElementById('conteudoNotasAluno');
+    const materiaSelecionada = document.getElementById('filtroMateriaNotas').value;
+    const trimestreSelecionado = document.getElementById('filtroTrimestreNotas').value;
+
+    const notasFiltradas = dadosCompletosAluno.notas.filter(nota => {
+        const porMateria = materiaSelecionada === 'todos' || nota.materia === materiaSelecionada;
+        const porTrimestre = trimestreSelecionado === 'todos' || nota.trimestre == trimestreSelecionado;
+        return porMateria && porTrimestre;
+    });
+
+    if (notasFiltradas.length === 0) {
+        conteudoNotas.innerHTML = '<p>Nenhuma nota encontrada com os filtros selecionados.</p>';
+        return;
+    }
+
+    const notasAgrupadasPorMateria = notasFiltradas.reduce((acc, nota) => {
+        if (!acc[nota.materia]) {
+            acc[nota.materia] = [];
+        }
+        acc[nota.materia].push(nota);
+        return acc;
+    }, {});
+
+    let html = '';
+    for (const materia in notasAgrupadasPorMateria) {
+        const notasDaMateria = notasAgrupadasPorMateria[materia];
+
+        const notasPorTrimestre = notasDaMateria.reduce((acc, nota) => {
+            if (!acc[nota.trimestre]) {
+                acc[nota.trimestre] = [];
+            }
+            acc[nota.trimestre].push(parseFloat(nota.nota));
+            return acc;
+        }, {});
+        
+        let mediasTrimestrais = [];
+        for (const trimestre in notasPorTrimestre) {
+            const notas = notasPorTrimestre[trimestre];
+            const mediaTrimestre = notas.reduce((sum, nota) => sum + nota, 0) / notas.length;
+            mediasTrimestrais.push(mediaTrimestre);
+        }
+
+        const mediaFinal = mediasTrimestrais.length > 0
+            ? mediasTrimestrais.reduce((sum, media) => sum + media, 0) / mediasTrimestrais.length
+            : null;
+
+        const avaliacoesUnicas = Array.from(new Set(notasDaMateria.map(av => JSON.stringify({
+            descricao: av.descricao,
+            trimestre: av.trimestre
+        })))).map(s => JSON.parse(s));
+
+        const avaliacoesPorTrimestre = {};
+        avaliacoesUnicas.forEach(av => {
+            if (!avaliacoesPorTrimestre[av.trimestre]) {
+                avaliacoesPorTrimestre[av.trimestre] = [];
+            }
+            avaliacoesPorTrimestre[av.trimestre].push(av);
+        });
+
+        const trimestresOrdenados = Object.keys(avaliacoesPorTrimestre).sort();
+        
+        const nomeMateria = materia.charAt(0).toUpperCase() + materia.slice(1);
+        
+        html += `
+            <div class="materia-bloco">
+                <h3>${nomeMateria}</h3>
+                <div class="tabela-notas-container">
+                    <table class="tabela-notas-aluno">
+                        <thead>
+                            <tr>
+                                <th rowspan="2">Avaliação</th>
+                                ${trimestresOrdenados.map(trimestre => {
+                                    const avs = avaliacoesPorTrimestre[trimestre];
+                                    return `<th colspan="${avs.length}" class="trimestre-header">${trimestre}º Trimestre</th>`;
+                                }).join('')}
+                                <th rowspan="2">Média Final</th>
+                            </tr>
+                            <tr>
+                                ${trimestresOrdenados.map(trimestre => {
+                                    const avs = avaliacoesPorTrimestre[trimestre];
+                                    return avs.map((av, index) => {
+                                        const isFirstInTrimestre = index === 0;
+                                        const dividerClass = isFirstInTrimestre ? 'trimestre-divider' : '';
+                                        return `<th class="nota-header ${dividerClass}">${av.descricao}</th>`;
+                                    }).join('');
+                                }).join('')}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Notas</td>
+                                ${trimestresOrdenados.map(trimestre => {
+                                    const avaliacoesDoTrimestre = avaliacoesPorTrimestre[trimestre] || [];
+                                    return avaliacoesDoTrimestre.map((avUnica, index) => {
+                                        const nota = notasDaMateria.find(n => 
+                                            n.descricao === avUnica.descricao && n.trimestre == avUnica.trimestre
+                                        )?.nota || '---';
+                                        const isFirstInTrimestre = index === 0;
+                                        const dividerClass = isFirstInTrimestre ? 'trimestre-divider' : '';
+                                        return `<td class="${dividerClass}">${nota}</td>`;
+                                    }).join('');
+                                }).join('')}
+                                <td class="media-final">${mediaFinal !== null ? mediaFinal.toFixed(2) : '---'}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    }
+    conteudoNotas.innerHTML = html;
+}
+
+function renderizarFaltasAluno() {
+    const conteudoFaltas = document.getElementById('conteudoFaltasAluno');
+    const materiaSelecionada = document.getElementById('filtroMateriaFaltas').value;
+    const presencasFiltradas = dadosCompletosAluno.presencas.filter(p => {
+        return materiaSelecionada === 'todos' || p.materia === materiaSelecionada;
+    });
+
+    if (presencasFiltradas.length === 0) {
+        conteudoFaltas.innerHTML = '<p>Nenhum registro de chamada encontrado com os filtros selecionados.</p>';
+        return;
+    }
+
+    const presencasAgrupadasPorMateria = presencasFiltradas.reduce((acc, p) => {
+        if (!acc[p.materia]) {
+            acc[p.materia] = [];
+        }
+        acc[p.materia].push(p);
+        return acc;
+    }, {});
+
+    let html = '';
+    for (const materia in presencasAgrupadasPorMateria) {
+        const nomeMateria = materia.charAt(0).toUpperCase() + materia.slice(1);
+        const presencasDaMateria = presencasAgrupadasPorMateria[materia];
+        const faltas = presencasDaMateria.filter(p => p.status === 'falta').length;
+        
+        html += `
+            <div class="materia-bloco">
+                <h3>${nomeMateria}</h3>
+                <h4>Total de Faltas: ${faltas}</h4>
+                <div id="calendario-materia-${materia}" class="calendario-faltas"></div>
+            </div>
+        `;
+    }
+
+    conteudoFaltas.innerHTML = html;
+
+    for (const materia in presencasAgrupadasPorMateria) {
+        const presencasDaMateria = presencasAgrupadasPorMateria[materia];
+        const calendarioDiv = document.getElementById(`calendario-materia-${materia}`);
+        renderizarCalendarioFaltas(calendarioDiv, presencasDaMateria);
+    }
+}
+
+function renderizarCalendarioFaltas(container, presencas) {
+    let dataAtual = new Date();
+    let ano = dataAtual.getFullYear();
+    let mes = dataAtual.getMonth();
+
+    function desenharCalendario(ano, mes) {
+        const diasNoMes = new Date(ano, mes + 1, 0).getDate();
+        const primeiroDiaSemana = new Date(ano, mes, 1).getDay();
+        const nomesMeses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+        const nomesSemanas = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
+        container.innerHTML = '';
+
+        const header = document.createElement('div');
+        header.className = 'calendario-header';
+        header.innerHTML = `
+            <button onclick="mudarMesCalendario('${container.id}', -1)">&lt;</button>
+            <span>${nomesMeses[mes]} ${ano}</span>
+            <button onclick="mudarMesCalendario('${container.id}', 1)">&gt;</button>
+        `;
+        container.appendChild(header);
+
+        const diasSemanaDiv = document.createElement('div');
+        diasSemanaDiv.className = 'calendario-dias-semana';
+        nomesSemanas.forEach(dia => {
+            const div = document.createElement('div');
+            div.textContent = dia;
+            diasSemanaDiv.appendChild(div);
+        });
+        container.appendChild(diasSemanaDiv);
+        
+        for (let i = 0; i < primeiroDiaSemana; i++) {
+            const div = document.createElement('div');
+            div.className = 'calendario-dia dia-inativo';
+            container.appendChild(div);
+        }
+
+        for (let dia = 1; dia <= diasNoMes; dia++) {
+            const dataDia = new Date(ano, mes, dia);
+            const dataFormatada = dataDia.toISOString().slice(0, 10);
+            const registro = presencas.find(p => p.data.slice(0, 10) === dataFormatada);
+
+            const div = document.createElement('div');
+            div.className = 'calendario-dia';
+            div.textContent = dia;
+
+            if (registro) {
+                if (registro.status === 'presente') {
+                    div.classList.add('dia-presente');
+                } else if (registro.status === 'falta') {
+                    div.classList.add('dia-falta');
+                }
+            }
+            container.appendChild(div);
+        }
+    }
+
+    window.mudarMesCalendario = (containerId, delta) => {
+        const containerMateria = document.getElementById(containerId);
+        if (containerMateria) {
+            mes += delta;
+            if (mes < 0) {
+                mes = 11;
+                ano--;
+            } else if (mes > 11) {
+                mes = 0;
+                ano++;
+            }
+            desenharCalendario(ano, mes);
+        }
+    };
+
+    desenharCalendario(ano, mes);
+}
+
 // ===============================
-// FUNÇÃO AUXILIAR PARA API
+// FUNÇÕES AUXILIARES
 // ===============================
+function calcularMedia(notas) {
+    if (notas.length === 0) return null;
+    const notasNumericas = notas.filter(nota => !isNaN(parseFloat(nota))).map(nota => parseFloat(nota));
+    if (notasNumericas.length === 0) return null;
+    const total = notasNumericas.reduce((sum, nota) => sum + nota, 0);
+    return total / notasNumericas.length;
+}
+
 async function apiFetch(endpoint, method = 'GET', body = null) {
     const token = localStorage.getItem("token");
     if (!token) { logout(); throw new Error("Token não encontrado."); }
