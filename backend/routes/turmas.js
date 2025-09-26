@@ -9,11 +9,21 @@ router.get('/', authenticateToken, async (req, res) => {
     const user = req.user;
     try {
         if (user.perfil === 'administrador') {
+            // CORREÇÃO: Usando GROUP_CONCAT e GROUP BY para listar a turma uma única vez
+            // e mostrar todos os professores associados. Listando explicitamente todas as colunas
+            // não agregadas no GROUP BY para compatibilidade com MySQL 5.7+
             const [rows] = await pool.query(`
-                SELECT t.*, u.nome as professor_nome 
+                SELECT 
+                    t.id_turma, 
+                    t.nome, 
+                    t.descricao, 
+                    t.ano, 
+                    GROUP_CONCAT(DISTINCT u.nome SEPARATOR ', ') AS professor_nome 
                 FROM turmas t 
                 LEFT JOIN professores_turmas pt ON t.id_turma = pt.id_turma 
                 LEFT JOIN usuarios u ON pt.id_professor = u.id_usuario
+                GROUP BY t.id_turma, t.nome, t.descricao, t.ano
+                ORDER BY t.nome
             `);
             return res.json(rows);
         }
@@ -122,33 +132,32 @@ router.put('/:id', authenticateToken, authorizeRoles('administrador'), async (re
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
-    if (senha) {
-        const hash = await bcrypt.hash(senha, 10);
-        await connection.query('UPDATE usuarios SET nome=?, email=?, senha=?, perfil=? WHERE id_usuario=?', [nome, email, hash, perfil, idUsuario]);
-    } else {
-        await connection.query('UPDATE usuarios SET nome=?, email=?, perfil=? WHERE id_usuario=?', [nome, email, perfil, idUsuario]);
-    }
+    
+    // 1. Atualiza os dados básicos da turma
+    await connection.query('UPDATE turmas SET nome=?, descricao=?, ano=? WHERE id_turma=?', [nome, descricao, ano, idTurma]);
 
-    if (perfil === 'professor') {
-        await connection.query('DELETE FROM professores_turmas WHERE id_professor = ?', [idUsuario]);
-        if (turmas && turmas.length > 0) {
-            for (const t of turmas) {
-                await connection.query('INSERT INTO professores_turmas (id_professor, id_turma, materia) VALUES (?, ?, ?)', [idUsuario, t.id_turma, t.materia]);
+    // 2. Apaga e recria as associações de professores para esta turma (se houver dados de professores na requisição)
+    // NOTE: A lógica anterior aqui estava incorreta e duplicava código de atualização de usuários.
+    // A correção foca em gerenciar apenas a turma e suas associações de professores.
+    if (id_professor && materias) {
+        // Limpa todas as associações existentes de professores para esta turma
+        await connection.query('DELETE FROM professores_turmas WHERE id_turma = ?', [idTurma]);
+        
+        // Recria as novas associações (se houver matérias)
+        if (materias.length > 0) {
+            for (const materia of materias) {
+                await connection.query('INSERT INTO professores_turmas (id_professor, id_turma, materia) VALUES (?, ?, ?)', [id_professor, idTurma, materia]);
             }
         }
     }
 
-    if (perfil === 'aluno' && id_turma) {
-        await connection.query('DELETE FROM alunos_turmas WHERE id_aluno = ?', [idUsuario]);
-        await connection.query('INSERT INTO alunos_turmas (id_aluno, id_turma, data_matricula) VALUES (?, ?, CURDATE())', [idUsuario, id_turma]);
-    }
 
     await connection.commit();
     res.json({ ok: true });
   } catch (err) {
     await connection.rollback();
     console.error(err);
-    res.status(500).json({ error: 'Erro ao atualizar' });
+    res.status(500).json({ error: 'Erro ao atualizar turma' });
   } finally {
     connection.release();
   }

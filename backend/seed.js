@@ -19,7 +19,8 @@ async function run(){
     const idTurma = tm.insertId;
 
     // associar professor e matricular alunos
-    await pool.query('INSERT INTO professores_turmas (id_professor, id_turma) VALUES (?, ?)', [idProf, idTurma]);
+    // CORREÇÃO: Adicionando 'materia' que é agora obrigatório
+    await pool.query('INSERT INTO professores_turmas (id_professor, id_turma, materia) VALUES (?, ?, ?)', [idProf, idTurma, 'matematica']);
 
     // pega ids dos alunos
     const [alunos] = await pool.query('SELECT id_usuario FROM usuarios WHERE perfil = "aluno"');

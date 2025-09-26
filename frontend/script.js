@@ -78,7 +78,7 @@ async function abrirModalTurma(turma = null) {
     
     modalTitle.textContent = turma ? 'Editar Turma' : 'Criar Nova Turma';
     const usuariosResponse = await apiFetch('/usuarios');
-    const todosUsuarios = await usuariosResponse.json();
+    const todosUsuarios = usuariosResponse; // apiFetch modificado retorna data, não response
     const professores = todosUsuarios.filter(u => u.perfil === 'professor');
     modalFormFields.innerHTML = `
         <label for="nome">Nome da Turma</label>
@@ -118,17 +118,17 @@ async function abrirModalUsuario(perfil, usuario = null) {
     const materias = ['matematica', 'portugues', 'artes', 'educacao fisica', 'ingles', 'geografia', 'sociologia', 'filosofia', 'historia', 'biologia', 'fisica', 'quimica', 'projeto de vida', 'projeto profissional'];
     let extraFieldsHTML = '';
     if (perfil === 'professor') {
-        const turmas = await (await apiFetch('/turmas')).json();
+        const turmas = await (await apiFetch('/turmas'));
         extraFieldsHTML = `<label>Associar Turmas e Matérias</label><div class="multi-select-container"><div id="tags-container"></div><select id="turmas-select"><option value="">Adicionar turma...</option>${turmas.map(t => `<option value="${t.id_turma}">${t.nome}</option>`).join('')}</select> <select id="materias-select"><option value="">Selecione a matéria...</option>${materias.map(m => `<option value="${m}">${m.charAt(0).toUpperCase() + m.slice(1)}</option>`).join('')}</select> <button type="button" onclick="adicionarMateriaProfessor()">Adicionar</button></div>`;
     } else if (perfil === 'aluno') {
-        const turmas = await (await apiFetch('/turmas')).json();
+        const turmas = await (await apiFetch('/turmas'));
         const idTurmaAtual = usuario ? usuario.id_turma : null;
         extraFieldsHTML = `<label for="id_turma">Turma</label><select id="id_turma" name="id_turma" required><option value="" disabled ${!idTurmaAtual ? 'selected' : ''}>Selecione uma turma...</option>${turmas.map(t => `<option value="${t.id_turma}" ${t.id_turma === idTurmaAtual ? 'selected' : ''}>${t.nome}</option>`).join('')}</select>`;
     }
     modalFormFields.innerHTML = `<label for="nome">Nome</label><input type="text" id="nome" name="nome" value="${usuario?.nome || ''}" required><label for="email">Email</label><input type="email" id="email" name="email" value="${usuario?.email || ''}" required><label for="senha">Senha</label><input type="password" id="senha" name="senha" placeholder="${usuario ? 'Deixe em branco para não alterar' : 'Senha temporária'}">${extraFieldsHTML}`;
     adminModal.style.display = 'flex';
     if (perfil === 'professor' && usuario) {
-        const turmasAtuais = await (await apiFetch(`/usuarios/${usuario.id_usuario}/turmas`)).json();
+        const turmasAtuais = await (await apiFetch(`/usuarios/${usuario.id_usuario}/turmas`));
         setTimeout(() => popularMultiSelect(turmasAtuais), 0);
     }
     modalForm.onsubmit = async (event) => {
@@ -140,11 +140,22 @@ async function abrirModalUsuario(perfil, usuario = null) {
         }
         if (usuario && !data.senha) delete data.senha;
         if (usuario) {
-            await apiFetch(`/usuarios/${usuario.id_usuario}`, 'PUT', data);
-            alert(`✅ ${perfil} atualizado!`);
+            const response = await apiFetch(`/usuarios/${usuario.id_usuario}`, 'PUT', data, true); // Passa true para retornar o objeto Response
+             if (response.ok) {
+                 alert(`✅ ${perfil} atualizado com sucesso!`);
+             } else {
+                 const err = await response.json(); 
+                 alert(`❌ Erro ao atualizar ${perfil}: ${err.error || response.statusText || 'Erro desconhecido'}`);
+             }
         } else {
-            await apiFetch('/usuarios', 'POST', data);
-            alert(`✅ ${perfil} criado!`);
+            const response = await apiFetch('/usuarios', 'POST', data, true); // Passa true para retornar o objeto Response
+            
+            if (response.ok) { // Verifica se a resposta é 2xx (ex: 201 Created)
+                alert(`✅ ${perfil} criado com sucesso!`);
+            } else {
+                const err = await response.json(); 
+                alert(`❌ Erro ao criar ${perfil}: ${err.error || response.statusText || 'Erro desconhecido'}`);
+            }
         }
         fecharModal();
         carregarUsuarios(perfil);
@@ -193,7 +204,7 @@ function carregarDadosAdmin() { carregarTurmas(); carregarUsuarios('professor');
 function mostrarSecao(secao) { document.querySelectorAll('.painel').forEach(s => s.id === secao ? s.classList.remove('hidden') : s.classList.add('hidden')); }
 async function carregarTurmas() {
     try {
-        const turmas = await (await apiFetch('/turmas')).json();
+        const turmas = await (await apiFetch('/turmas'));
         document.getElementById("listaTurmas").innerHTML = turmas.map(turma => `<li><span>${turma.nome} (${turma.ano}) - Prof: ${turma.professor_nome || 'Nenhum'}</span><div><button onclick='abrirModalTurma(${JSON.stringify(turma)})'>Editar</button><button onclick="excluirTurma(${turma.id_turma})">Excluir</button></div></li>`).join('');
     } catch (e) { console.error(e) }
 }
@@ -205,7 +216,7 @@ async function excluirTurma(id) {
 }
 async function carregarUsuarios(perfil) {
     try {
-        const usuarios = await (await apiFetch('/usuarios')).json();
+        const usuarios = await (await apiFetch('/usuarios'));
         const listaId = perfil === 'professor' ? 'listaProfessores' : 'listaAlunos';
         document.getElementById(listaId).innerHTML = usuarios.filter(u => u.perfil === perfil).map(usuario => {
             let infoExtra = '';
@@ -223,7 +234,7 @@ async function carregarUsuarios(perfil) {
 
 async function carregarDadosProfessor() {
     try {
-        const turmas = await (await apiFetch('/turmas')).json();
+        const turmas = await (await apiFetch('/turmas'));
         const listaTurmasProfessor = document.getElementById("listaTurmasProfessor");
         const turmasAgrupadas = turmas.reduce((acc, t) => {
             if (!acc[t.id_turma]) {
@@ -304,8 +315,8 @@ async function verResumoDaMateria() {
     listaAlunosResumoEl.innerHTML = '<li>Carregando resumo de faltas...</li>';
 
     try {
-        const alunos = await (await apiFetch(`/turmas/${id_turma}/alunos`)).json();
-        const faltasPorMateria = await (await apiFetch(`/turmas/${id_turma}/alunos/faltas`)).json();
+        const alunos = await (await apiFetch(`/turmas/${id_turma}/alunos`));
+        const faltasPorMateria = await (await apiFetch(`/turmas/${id_turma}/alunos/faltas`));
 
         const faltasMap = faltasPorMateria.reduce((acc, aluno) => {
             if (aluno.materia === materiaSelecionadaGlobal) {
@@ -339,14 +350,14 @@ async function verAlunosParaChamada() {
     formChamada.onsubmit = (event) => salvarChamada(event, id_turma);
 
     try {
-        const alunos = await (await apiFetch(`/turmas/${id_turma}/alunos`)).json();
+        const alunos = await (await apiFetch(`/turmas/${id_turma}/alunos`));
         if (alunos.length === 0) {
             listaAlunosChamadaEl.innerHTML = '<li>Nenhum aluno matriculado nesta turma.</li>';
             return;
         }
         listaAlunosChamadaEl.innerHTML = alunos.map(aluno => `<li class="chamada-item"><span>${aluno.nome}</span><div class="chamada-options"><input type="radio" id="presente_${aluno.id_usuario}" name="aluno_${aluno.id_usuario}" value="presente" checked> <label for="presente_${aluno.id_usuario}">Presente</label><input type="radio" id="falta_${aluno.id_usuario}" name="aluno_${aluno.id_usuario}" value="falta"> <label for="falta_${aluno.id_usuario}">Falta</label></div></li>`).join('');
         try {
-            const presencasDoDia = await (await apiFetch(`/chamadas/turma/${id_turma}/materia/${materiaSelecionadaGlobal}/data/${hoje}`)).json();
+            const presencasDoDia = await (await apiFetch(`/chamadas/turma/${id_turma}/materia/${materiaSelecionadaGlobal}/data/${hoje}`));
             for (const id_aluno in presencasDoDia) {
                 const status = presencasDoDia[id_aluno];
                 const radio = document.querySelector(`input[name="aluno_${id_aluno}"][value="${status}"]`);
@@ -373,7 +384,7 @@ async function salvarChamada(event, id_turma) {
     });
     const payload = { id_turma, materia: materiaSelecionadaGlobal, data, presencas };
     try {
-        const response = await apiFetch('/chamadas', 'POST', payload);
+        const response = await apiFetch('/chamadas', 'POST', payload, true);
         if(response.ok) {
             alert('✅ Chamada salva com sucesso!');
             verResumoDaMateria();
@@ -403,7 +414,7 @@ async function verAlunosParaNotas() {
     notasContainer.innerHTML = '<li>Carregando notas...</li>';
     
     try {
-        const alunosComNotas = await (await apiFetch(`/notas/turma/${id_turma}/materia/${materiaSelecionadaGlobal}`)).json();
+        const alunosComNotas = await (await apiFetch(`/notas/turma/${id_turma}/materia/${materiaSelecionadaGlobal}`));
         alunosComNotasCache = alunosComNotas;
 
         if (alunosComNotas.length === 0) {
@@ -471,8 +482,8 @@ async function verAlunosParaNotas() {
                                 ${trimestresOrdenados.map(trimestre => {
                                     const avaliacoesDoTrimestre = avaliacoesPorTrimestre[trimestre] || [];
                                     return avaliacoesDoTrimestre.map((avUnica, index) => {
-                                        const nota = aluno.avaliacoes.find(alunoAv => 
-                                            alunoAv.descricao === avUnica.descricao && alunoAv.trimestre == avUnica.trimestre
+                                        const nota = aluno.avaliacoes.find(n => 
+                                            n.descricao === avUnica.descricao && n.trimestre == avUnica.trimestre
                                         )?.nota || '---';
                                         const isFirstInTrimestre = index === 0;
                                         const dividerClass = isFirstInTrimestre ? 'trimestre-divider' : '';
@@ -574,7 +585,7 @@ async function abrirModalAddAvaliacao() {
     notasModal.style.display = 'flex';
 
     try {
-        const alunos = await (await apiFetch(`/turmas/${id_turma}/alunos`)).json();
+        const alunos = await (await apiFetch(`/turmas/${id_turma}/alunos`));
 
         if (alunos.length === 0) {
             modalCorpo.innerHTML = "<p>Nenhum aluno encontrado nesta turma.</p>";
@@ -617,13 +628,13 @@ async function abrirModalAddAvaliacao() {
             const notas = [];
             const form = event.target;
             form.querySelectorAll('input[type="number"]').forEach(input => {
-                const id_aluno = input.name.replace('nota_', '');
+                const id_aluno = input.name.replace('aluno_', '');
                 notas.push({ id_aluno: parseInt(id_aluno), nota: parseFloat(input.value) });
             });
             
             const payload = { id_turma, materia: materiaSelecionadaGlobal, descricao, trimestre, notas };
             
-            const response = await apiFetch('/notas/lancar-em-lote', 'POST', payload);
+            const response = await apiFetch('/notas/lancar-em-lote', 'POST', payload, true);
             if (response.ok) {
                 alert('✅ Avaliação lançada com sucesso!');
                 fecharModalNotas();
@@ -643,7 +654,7 @@ async function excluirAvaliacaoPorDescricao(descricao, id_turma) {
     }
 
     try {
-        const alunosComNotas = await (await apiFetch(`/notas/turma/${id_turma}/materia/${materiaSelecionadaGlobal}`)).json();
+        const alunosComNotas = await (await apiFetch(`/notas/turma/${id_turma}/materia/${materiaSelecionadaGlobal}`));
         const avaliacoesParaExcluir = alunosComNotas.flatMap(aluno => aluno.avaliacoes)
                                                    .filter(av => av.descricao === descricao)
                                                    .map(av => av.id_avaliacao);
@@ -672,10 +683,11 @@ async function carregarDadosAluno() {
     const turmaEl = document.getElementById('turmaAluno');
     
     try {
+        // As chamadas API agora retornam o JSON de dados diretamente
         const [turmas, presencas, notas] = await Promise.all([
-            (await apiFetch('/turmas')).json(),
-            (await apiFetch('/chamadas/me')).json(),
-            (await apiFetch('/notas/me')).json()
+            apiFetch('/turmas'),
+            apiFetch('/chamadas/me'),
+            apiFetch('/notas/me')
         ]);
         
         if (turmas.length > 0) {
@@ -684,20 +696,35 @@ async function carregarDadosAluno() {
             turmaEl.textContent = 'Você não está matriculado em nenhuma turma.';
         }
 
+        // Os dados de presença agora contêm objetos Date, mas serão tratados nas funções de renderização
         dadosCompletosAluno.notas = notas;
         dadosCompletosAluno.presencas = presencas;
 
         const materiasUnicas = new Set(dadosCompletosAluno.notas.map(n => n.materia).concat(dadosCompletosAluno.presencas.map(p => p.materia)));
-        const materiasDisponiveis = ['todos', ...Array.from(materiasUnicas)].map(m => `<option value="${m}">${m.charAt(0).toUpperCase() + m.slice(1)}</option>`).join('');
+        // CORREÇÃO: Garantir que 'todos' esteja selecionado
+        const materiasDisponiveis = ['todos', ...Array.from(materiasUnicas)].map(m => {
+            const isSelected = m === 'todos' ? 'selected' : '';
+            return `<option value="${m}" ${isSelected}>${m.charAt(0).toUpperCase() + m.slice(1)}</option>`;
+        }).join('');
         
         document.getElementById('filtroMateriaNotas').innerHTML = materiasDisponiveis;
         document.getElementById('filtroMateriaFaltas').innerHTML = materiasDisponiveis;
         
+        // CORREÇÃO FINAL: Garantir que os filtros estejam definidos antes de renderizar
+        document.getElementById('filtroMateriaNotas').value = 'todos';
+        document.getElementById('filtroMateriaFaltas').value = 'todos';
+        
         const trimestresUnicos = new Set(dadosCompletosAluno.notas.map(n => n.trimestre).filter(t => t !== null));
-        const trimestresDisponiveis = ['todos', ...Array.from(trimestresUnicos).sort()].map(t => `<option value="${t}">${t === 'todos' ? 'Todos' : t + 'º Trimestre'}</option>`).join('');
+        // CORREÇÃO: Garantir que 'todos' esteja selecionado
+        const trimestresDisponiveis = ['todos', ...Array.from(trimestresUnicos).sort()].map(t => {
+            const isSelected = t === 'todos' ? 'selected' : '';
+            return `<option value="${t}" ${isSelected}>${t === 'todos' ? 'Todos' : t + 'º Trimestre'}</option>`;
+        }).join('');
         
         document.getElementById('filtroTrimestreNotas').innerHTML = trimestresDisponiveis;
-        
+        document.getElementById('filtroTrimestreNotas').value = 'todos'; // Corrigido para selecionar o valor 'todos'
+
+        // NOTA: A seção Notas é exibida por padrão. Se houver dados (presencas.length > 0), o painel será preenchido.
         mostrarSecaoAluno('notas');
         
     } catch (e) {
@@ -806,7 +833,7 @@ function renderizarNotasAluno() {
                                     return avs.map((av, index) => {
                                         const isFirstInTrimestre = index === 0;
                                         const dividerClass = isFirstInTrimestre ? 'trimestre-divider' : '';
-                                        return `<th class="nota-header ${dividerClass}">${av.descricao}</th>`;
+                                        return `<th class="nota-header ${dividerClass}" data-trimestre="${av.trimestre}">${av.descricao} <button class="btn-excluir-aval" data-desc="${av.descricao}">&times;</button></th>`;
                                     }).join('');
                                 }).join('')}
                             </tr>
@@ -822,7 +849,7 @@ function renderizarNotasAluno() {
                                         )?.nota || '---';
                                         const isFirstInTrimestre = index === 0;
                                         const dividerClass = isFirstInTrimestre ? 'trimestre-divider' : '';
-                                        return `<td class="${dividerClass}">${nota}</td>`;
+                                        return `<td class="${dividerClass}" data-trimestre="${avUnica.trimestre}">${nota}</td>`;
                                     }).join('');
                                 }).join('')}
                                 <td class="media-final">${mediaFinal !== null ? mediaFinal.toFixed(2) : '---'}</td>
@@ -839,7 +866,12 @@ function renderizarNotasAluno() {
 function renderizarFaltasAluno() {
     const conteudoFaltas = document.getElementById('conteudoFaltasAluno');
     const materiaSelecionada = document.getElementById('filtroMateriaFaltas').value;
+    
+    // CORREÇÃO: Filtragem estrita para garantir que p.materia é válido antes de prosseguir
     const presencasFiltradas = dadosCompletosAluno.presencas.filter(p => {
+        if (!p.materia || typeof p.materia !== 'string') {
+            return false;
+        }
         return materiaSelecionada === 'todos' || p.materia === materiaSelecionada;
     });
 
@@ -849,10 +881,11 @@ function renderizarFaltasAluno() {
     }
 
     const presencasAgrupadasPorMateria = presencasFiltradas.reduce((acc, p) => {
-        if (!acc[p.materia]) {
-            acc[p.materia] = [];
+        const materia = p.materia;
+        if (!acc[materia]) {
+            acc[materia] = [];
         }
-        acc[p.materia].push(p);
+        acc[materia].push(p);
         return acc;
     }, {});
 
@@ -862,6 +895,7 @@ function renderizarFaltasAluno() {
         const presencasDaMateria = presencasAgrupadasPorMateria[materia];
         const faltas = presencasDaMateria.filter(p => p.status === 'falta').length;
         
+        // Renderiza a estrutura da matéria
         html += `
             <div class="materia-bloco">
                 <h3>${nomeMateria}</h3>
@@ -881,9 +915,17 @@ function renderizarFaltasAluno() {
 }
 
 function renderizarCalendarioFaltas(container, presencas) {
-    let dataAtual = new Date();
-    let ano = dataAtual.getFullYear();
-    let mes = dataAtual.getMonth();
+    // A API backend retorna o campo 'data' como um objeto Date (ex: 2025-09-26T03:00:00.000Z)
+    let dataInicial;
+    if (presencas.length > 0) {
+        // Usa o objeto Date retornado para inicializar o calendário
+        dataInicial = new Date(presencas[0].data); 
+    } else {
+        dataInicial = new Date();
+    }
+
+    let ano = dataInicial.getFullYear();
+    let mes = dataInicial.getMonth();
 
     function desenharCalendario(ano, mes) {
         const diasNoMes = new Date(ano, mes + 1, 0).getDate();
@@ -895,10 +937,11 @@ function renderizarCalendarioFaltas(container, presencas) {
 
         const header = document.createElement('div');
         header.className = 'calendario-header';
+        // Atualiza a chamada para MudarMesCalendario para passar os parâmetros atuais
         header.innerHTML = `
-            <button onclick="mudarMesCalendario('${container.id}', -1)">&lt;</button>
+            <button onclick="mudarMesCalendario('${container.id}', -1, ${ano}, ${mes})">&lt;</button>
             <span>${nomesMeses[mes]} ${ano}</span>
-            <button onclick="mudarMesCalendario('${container.id}', 1)">&gt;</button>
+            <button onclick="mudarMesCalendario('${container.id}', 1, ${ano}, ${mes})">&gt;</button>
         `;
         container.appendChild(header);
 
@@ -918,9 +961,17 @@ function renderizarCalendarioFaltas(container, presencas) {
         }
 
         for (let dia = 1; dia <= diasNoMes; dia++) {
-            const dataDia = new Date(ano, mes, dia);
-            const dataFormatada = dataDia.toISOString().slice(0, 10);
-            const registro = presencas.find(p => p.data.slice(0, 10) === dataFormatada);
+            // Reconstruir a string YYYY-MM-DD localmente para comparação
+            const mesStr = (mes + 1).toString().padStart(2, '0');
+            const diaStr = dia.toString().padStart(2, '0');
+            const dataFormatada = `${ano}-${mesStr}-${diaStr}`;
+            
+            // CORREÇÃO CRÍTICA:
+            // O p.data é um objeto Date. Devemos convertê-lo para string ISO antes de comparar.
+            const registro = presencas.find(p => {
+                 // A fatia (slice) é feita no objeto Date convertido para ISO string
+                return new Date(p.data).toISOString().slice(0, 10) === dataFormatada;
+            });
 
             const div = document.createElement('div');
             div.className = 'calendario-dia';
@@ -937,18 +988,23 @@ function renderizarCalendarioFaltas(container, presencas) {
         }
     }
 
-    window.mudarMesCalendario = (containerId, delta) => {
-        const containerMateria = document.getElementById(containerId);
-        if (containerMateria) {
-            mes += delta;
-            if (mes < 0) {
-                mes = 11;
-                ano--;
-            } else if (mes > 11) {
-                mes = 0;
-                ano++;
-            }
-            desenharCalendario(ano, mes);
+    // Função global que recebe as variáveis de controle (ano e mês)
+    window.mudarMesCalendario = (containerId, delta, currentAno, currentMes) => {
+        let newMes = currentMes + delta;
+        let newAno = currentAno;
+
+        if (newMes < 0) {
+            newMes = 11;
+            newAno--;
+        } else if (newMes > 11) {
+            newMes = 0;
+            newAno++;
+        }
+        
+        const containerEl = document.getElementById(containerId);
+        if (containerEl) {
+             // Redesenha com o novo contexto de data.
+             desenharCalendario(newAno, newMes); 
         }
     };
 
@@ -966,15 +1022,44 @@ function calcularMedia(notas) {
     return total / notasNumericas.length;
 }
 
-async function apiFetch(endpoint, method = 'GET', body = null) {
+// ATENÇÃO: Função modificada para forçar o retorno do JSON e logar a resposta da API
+async function apiFetch(endpoint, method = 'GET', body = null, returnResponseObject = false) {
     const token = localStorage.getItem("token");
     if (!token) { logout(); throw new Error("Token não encontrado."); }
     const options = { method, headers: { 'Authorization': `Bearer ${token}` } };
     if (body) { options.headers['Content-Type'] = 'application/json'; options.body = JSON.stringify(body); }
     const response = await fetch(`${API_URL}${endpoint}`, options);
+    
     if (response.status === 401 || response.status === 403) { logout(); throw new Error("Não autorizado."); }
-    if (!response.ok && response.status !== 201) { 
-        console.error("Erro na API", await response.json()); 
+
+    if (returnResponseObject) {
+         // Necessário para chamadas POST/PUT que só precisam do status.
+         return response;
     }
-    return response;
+    
+    // Tentativa de ler a resposta JSON
+    try {
+        // Clona a resposta para permitir a leitura duplicada (log e consumo)
+        const data = await response.clone().json();
+        
+        // LOG DE DIAGNÓSTICO CRÍTICO
+        if (endpoint.includes('/me') || !response.ok) {
+            console.log(`DIAGNÓSTICO API ${endpoint} (Status ${response.status}):`, data);
+        }
+        
+        if (!response.ok && response.status !== 201) { 
+            console.error("Erro na API", data); 
+            // Lançar um erro para que a função chamadora possa usar o bloco catch
+            throw new Error(data.error || `Erro de API com status ${response.status}`);
+        }
+        
+        return data; // Retorna o JSON de dados
+    } catch (e) {
+        // Se a resposta for 204 No Content (sem JSON) ou se houver um erro de parsing
+        if (response.status === 204) return [];
+        
+        console.error(`Erro ao processar JSON da API (${response.status} ${endpoint}):`, e);
+        // Lançar um erro se não for possível ler o JSON e a resposta não for 204
+        throw new Error(`Falha ao ler resposta da API para ${endpoint}.`);
+    }
 }

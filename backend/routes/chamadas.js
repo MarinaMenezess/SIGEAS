@@ -67,14 +67,23 @@ router.post('/', authenticateToken, authorizeRoles('professor'), async (req, res
 // GET /api/chamadas/me -> Aluno busca seu histórico de presença
 router.get('/me', authenticateToken, authorizeRoles('aluno'), async (req, res) => {
     const id_aluno = req.user.id_usuario;
+    // --- INÍCIO DO LOG DE DIAGNÓSTICO ---
+    console.log("DEBUG: GET /api/chamadas/me");
+    console.log("DEBUG: ID do Aluno (JWT):", id_aluno); 
+    // --- FIM DO LOG DE DIAGNÓSTICO ---
     try {
         const [rows] = await pool.query(
             `SELECT materia, data, status FROM chamadas WHERE id_aluno = ? ORDER BY data DESC`,
             [id_aluno]
         );
+        // --- INÍCIO DO LOG DE DIAGNÓSTICO ---
+        console.log("DEBUG: Query Executada com sucesso.");
+        console.log("DEBUG: Linhas Recebidas do DB:", rows.length);
+        console.log("DEBUG: Conteúdo da 1ª Linha (Se existir):", rows.length > 0 ? rows[0] : 'Vazio');
+        // --- FIM DO LOG DE DIAGNÓSTICO ---
         res.json(rows);
     } catch (err) {
-        console.error(err);
+        console.error("Erro no DB ao buscar chamadas/me:", err);
         res.status(500).json({ error: 'Erro ao buscar histórico de presença.' });
     }
 });
