@@ -424,11 +424,12 @@ async function verAlunosParaNotas() {
 
         const avaliacoesSet = new Set();
         alunosComNotas.flatMap(a => a.avaliacoes).forEach(aval => {
-            const key = `${aval.descricao}-${aval.trimestre}`;
-            avaliacoesSet.add(JSON.stringify({
-                descricao: aval.descricao,
-                trimestre: aval.trimestre
-            }));
+            if (aval && aval.descricao && aval.trimestre) {
+                avaliacoesSet.add(JSON.stringify({
+                    descricao: String(aval.descricao),
+                    trimestre: String(aval.trimestre)
+                }));
+            }
         });
         const avaliacoesUnicas = Array.from(avaliacoesSet).map(s => JSON.parse(s));
 
@@ -701,7 +702,7 @@ async function carregarDadosAluno() {
         dadosCompletosAluno.presencas = presencas;
 
         const materiasUnicas = new Set(dadosCompletosAluno.notas.map(n => n.materia).concat(dadosCompletosAluno.presencas.map(p => p.materia)));
-        // CORREÇÃO: Garantir que 'todos' esteja selecionado
+        // Garantir que 'todos' esteja selecionado
         const materiasDisponiveis = ['todos', ...Array.from(materiasUnicas)].map(m => {
             const isSelected = m === 'todos' ? 'selected' : '';
             return `<option value="${m}" ${isSelected}>${m.charAt(0).toUpperCase() + m.slice(1)}</option>`;
@@ -710,12 +711,12 @@ async function carregarDadosAluno() {
         document.getElementById('filtroMateriaNotas').innerHTML = materiasDisponiveis;
         document.getElementById('filtroMateriaFaltas').innerHTML = materiasDisponiveis;
         
-        // CORREÇÃO FINAL: Garantir que os filtros estejam definidos antes de renderizar
+        // Garantir que os filtros estejam definidos antes de renderizar
         document.getElementById('filtroMateriaNotas').value = 'todos';
         document.getElementById('filtroMateriaFaltas').value = 'todos';
         
         const trimestresUnicos = new Set(dadosCompletosAluno.notas.map(n => n.trimestre).filter(t => t !== null));
-        // CORREÇÃO: Garantir que 'todos' esteja selecionado
+        // Garantir que 'todos' esteja selecionado
         const trimestresDisponiveis = ['todos', ...Array.from(trimestresUnicos).sort()].map(t => {
             const isSelected = t === 'todos' ? 'selected' : '';
             return `<option value="${t}" ${isSelected}>${t === 'todos' ? 'Todos' : t + 'º Trimestre'}</option>`;
@@ -724,7 +725,7 @@ async function carregarDadosAluno() {
         document.getElementById('filtroTrimestreNotas').innerHTML = trimestresDisponiveis;
         document.getElementById('filtroTrimestreNotas').value = 'todos'; // Corrigido para selecionar o valor 'todos'
 
-        // NOTA: A seção Notas é exibida por padrão. Se houver dados (presencas.length > 0), o painel será preenchido.
+        // A seção Notas é exibida por padrão. 
         mostrarSecaoAluno('notas');
         
     } catch (e) {
@@ -736,8 +737,17 @@ async function carregarDadosAluno() {
 }
 
 function mostrarSecaoAluno(secao) {
-    document.querySelectorAll('.painel-aluno').forEach(s => s.classList.add('hidden'));
-    document.getElementById(`secao${secao.charAt(0).toUpperCase() + secao.slice(1)}`).classList.remove('hidden');
+    // CORREÇÃO CRÍTICA: Remove a classe 'active' de todos os painéis e adiciona ao alvo,
+    // garantindo que a regra CSS (.painel-aluno.active { display: block; }) funcione.
+    document.querySelectorAll('.painel-aluno').forEach(s => {
+        s.classList.add('hidden'); 
+        s.classList.remove('active');
+    });
+
+    const targetSection = document.getElementById(`secao${secao.charAt(0).toUpperCase() + secao.slice(1)}`);
+    // Adiciona a classe 'active' e remove 'hidden' no painel alvo para exibi-lo.
+    targetSection.classList.add('active');
+    targetSection.classList.remove('hidden');
 
     document.querySelectorAll('.aluno-nav button').forEach(btn => btn.classList.remove('active'));
     document.querySelector(`.aluno-nav button[onclick="mostrarSecaoAluno('${secao}')"]`).classList.add('active');
@@ -844,8 +854,9 @@ function renderizarNotasAluno() {
                                 ${trimestresOrdenados.map(trimestre => {
                                     const avaliacoesDoTrimestre = avaliacoesPorTrimestre[trimestre] || [];
                                     return avaliacoesDoTrimestre.map((avUnica, index) => {
+                                        // Correção anterior: Garante que o trimestre seja comparado como string para maior compatibilidade.
                                         const nota = notasDaMateria.find(n => 
-                                            n.descricao === avUnica.descricao && n.trimestre == avUnica.trimestre
+                                            n.descricao === avUnica.descricao && String(n.trimestre) === String(avUnica.trimestre)
                                         )?.nota || '---';
                                         const isFirstInTrimestre = index === 0;
                                         const dividerClass = isFirstInTrimestre ? 'trimestre-divider' : '';
@@ -867,7 +878,7 @@ function renderizarFaltasAluno() {
     const conteudoFaltas = document.getElementById('conteudoFaltasAluno');
     const materiaSelecionada = document.getElementById('filtroMateriaFaltas').value;
     
-    // CORREÇÃO: Filtragem estrita para garantir que p.materia é válido antes de prosseguir
+    // Filtragem estrita para garantir que p.materia é válido antes de prosseguir
     const presencasFiltradas = dadosCompletosAluno.presencas.filter(p => {
         if (!p.materia || typeof p.materia !== 'string') {
             return false;
@@ -966,11 +977,15 @@ function renderizarCalendarioFaltas(container, presencas) {
             const diaStr = dia.toString().padStart(2, '0');
             const dataFormatada = `${ano}-${mesStr}-${diaStr}`;
             
-            // CORREÇÃO CRÍTICA:
-            // O p.data é um objeto Date. Devemos convertê-lo para string ISO antes de comparar.
+            // Correção anterior: Usar métodos UTC para evitar o desvio de fuso horário local.
             const registro = presencas.find(p => {
-                 // A fatia (slice) é feita no objeto Date convertido para ISO string
-                return new Date(p.data).toISOString().slice(0, 10) === dataFormatada;
+                const dbDate = new Date(p.data);
+                const utcYear = dbDate.getUTCFullYear();
+                const utcMonth = (dbDate.getUTCMonth() + 1).toString().padStart(2, '0');
+                const utcDay = dbDate.getUTCDate().toString().padStart(2, '0');
+                const utcDateString = `${utcYear}-${utcMonth}-${utcDay}`;
+                
+                return utcDateString === dataFormatada;
             });
 
             const div = document.createElement('div');
