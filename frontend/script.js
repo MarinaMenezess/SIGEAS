@@ -7,6 +7,7 @@ let alunosComNotasCache = [];
 let turmaSelecionadaGlobal = { id: null, nome: '' };
 let materiaSelecionadaGlobal = null;
 let dadosAlunoCache = { notas: [], presencas: [] };
+let turmasCache = []; // NOVO: Cache de turmas para uso em filtros e modais
 
 document.addEventListener('DOMContentLoaded', () => {
     if (document.body.id === 'page-admin') {
@@ -77,9 +78,7 @@ async function abrirModalTurma(turma = null) {
     const modalFormFields = document.getElementById('modal-form-fields');
     
     modalTitle.textContent = turma ? 'Editar Turma' : 'Criar Nova Turma';
-    const usuariosResponse = await apiFetch('/usuarios');
-    const todosUsuarios = usuariosResponse; // apiFetch modificado retorna data, não response
-    const professores = todosUsuarios.filter(u => u.perfil === 'professor');
+    // REMOVIDO: Busca por professores
     modalFormFields.innerHTML = `
         <label for="nome">Nome da Turma</label>
         <input type="text" id="nome" name="nome" value="${turma?.nome || ''}" required>
@@ -87,16 +86,12 @@ async function abrirModalTurma(turma = null) {
         <input type="text" id="descricao" name="descricao" value="${turma?.descricao || ''}">
         <label for="ano">Ano</label>
         <input type="number" id="ano" name="ano" value="${turma?.ano || new Date().getFullYear()}" required>
-        <label for="id_professor">Associar Professor</label>
-        <select id="id_professor" name="id_professor">
-            <option value="">Nenhum</option>
-            ${professores.map(p => `<option value="${p.id_usuario}">${p.nome}</option>`).join('')}
-        </select>
     `;
     adminModal.style.display = 'flex';
     modalForm.onsubmit = async (event) => {
         event.preventDefault();
         const data = Object.fromEntries(new FormData(modalForm).entries());
+        // Não precisamos remover id_professor ou materias, pois não estão mais no formulário
         if (turma) {
             await apiFetch(`/turmas/${turma.id_turma}`, 'PUT', data);
             alert('✅ Turma atualizada!');
@@ -118,10 +113,12 @@ async function abrirModalUsuario(perfil, usuario = null) {
     const materias = ['matematica', 'portugues', 'artes', 'educacao fisica', 'ingles', 'geografia', 'sociologia', 'filosofia', 'historia', 'biologia', 'fisica', 'quimica', 'projeto de vida', 'projeto profissional'];
     let extraFieldsHTML = '';
     if (perfil === 'professor') {
-        const turmas = await (await apiFetch('/turmas'));
+        // Usa turmasCache para evitar nova chamada API se já carregado
+        const turmas = turmasCache.length > 0 ? turmasCache : await (await apiFetch('/turmas')); 
         extraFieldsHTML = `<label>Associar Turmas e Matérias</label><div class="multi-select-container"><div id="tags-container"></div><select id="turmas-select"><option value="">Adicionar turma...</option>${turmas.map(t => `<option value="${t.id_turma}">${t.nome}</option>`).join('')}</select> <select id="materias-select"><option value="">Selecione a matéria...</option>${materias.map(m => `<option value="${m}">${m.charAt(0).toUpperCase() + m.slice(1)}</option>`).join('')}</select> <button type="button" onclick="adicionarMateriaProfessor()">Adicionar</button></div>`;
     } else if (perfil === 'aluno') {
-        const turmas = await (await apiFetch('/turmas'));
+        // Usa turmasCache para evitar nova chamada API se já carregado
+        const turmas = turmasCache.length > 0 ? turmasCache : await (await apiFetch('/turmas')); 
         const idTurmaAtual = usuario ? usuario.id_turma : null;
         extraFieldsHTML = `<label for="id_turma">Turma</label><select id="id_turma" name="id_turma" required><option value="" disabled ${!idTurmaAtual ? 'selected' : ''}>Selecione uma turma...</option>${turmas.map(t => `<option value="${t.id_turma}" ${t.id_turma === idTurmaAtual ? 'selected' : ''}>${t.nome}</option>`).join('')}</select>`;
     }
@@ -200,25 +197,58 @@ function popularMultiSelect(turmasAtuais) {
 // ===============================
 // PAINEL DO ADMINISTRADOR
 // ===============================
-function carregarDadosAdmin() { carregarTurmas(); carregarUsuarios('professor'); carregarUsuarios('aluno'); }
+// ATUALIZADO: Carrega turmas primeiro para cache e filtros
+async function carregarDadosAdmin() { 
+    await carregarTurmas(); 
+    await carregarUsuarios('professor'); 
+    await carregarUsuarios('aluno'); 
+}
+
 function mostrarSecao(secao) { document.querySelectorAll('.painel').forEach(s => s.id === secao ? s.classList.remove('hidden') : s.classList.add('hidden')); }
+
 async function carregarTurmas() {
     try {
         const turmas = await (await apiFetch('/turmas'));
-        document.getElementById("listaTurmas").innerHTML = turmas.map(turma => `<li><span>${turma.nome} (${turma.ano}) - Prof: ${turma.professor_nome || 'Nenhum'}</span><div><button onclick='abrirModalTurma(${JSON.stringify(turma)})'>Editar</button><button onclick="excluirTurma(${turma.id_turma})">Excluir</button></div></li>`).join('');
+        turmasCache = turmas; // Armazena globalmente
+        // MODIFICADO: Removido exibição do professor
+        document.getElementById("listaTurmas").innerHTML = turmas.map(turma => `<li><span>${turma.nome} (${turma.ano})</span><div><button onclick='abrirModalTurma(${JSON.stringify(turma)})'>Editar</button><button onclick="excluirTurma(${turma.id_turma})">Excluir</button></div></li>`).join('');
     } catch (e) { console.error(e) }
 }
+
 async function excluirTurma(id) {
     if (!confirm("Tem certeza que deseja excluir esta turma?")) return;
     await apiFetch(`/turmas/${id}`, 'DELETE');
     alert('✅ Turma excluída!');
     carregarTurmas();
 }
-async function carregarUsuarios(perfil) {
+
+// ATUALIZADO: Recebe idTurmaFiltro e implementa o filtro para alunos.
+async function carregarUsuarios(perfil, idTurmaFiltro = 'todos') {
     try {
         const usuarios = await (await apiFetch('/usuarios'));
         const listaId = perfil === 'professor' ? 'listaProfessores' : 'listaAlunos';
-        document.getElementById(listaId).innerHTML = usuarios.filter(u => u.perfil === perfil).map(usuario => {
+        let usuariosFiltrados = usuarios.filter(u => u.perfil === perfil);
+
+        if (perfil === 'aluno') {
+            const filtroEl = document.getElementById('filtroTurmaAluno');
+            
+            // Popula o filtro de turmas na primeira vez que a seção de alunos é carregada
+            if (filtroEl.options.length === 0) {
+                filtroEl.innerHTML = `<option value="todos">Todas as Turmas</option>` +
+                    turmasCache.map(t => `<option value="${t.id_turma}">${t.nome}</option>`).join('');
+            }
+
+            // Garante que o valor do select corresponda ao filtro aplicado
+            filtroEl.value = idTurmaFiltro;
+
+            // Aplica o filtro de turma
+            if (idTurmaFiltro !== 'todos') {
+                // Filtra os alunos que têm o id_turma correspondente
+                usuariosFiltrados = usuariosFiltrados.filter(u => String(u.id_turma) === String(idTurmaFiltro));
+            }
+        }
+        
+        document.getElementById(listaId).innerHTML = usuariosFiltrados.map(usuario => {
             let infoExtra = '';
             if (perfil === 'aluno') {
                 infoExtra = `(${usuario.turma_nome || 'Sem turma'})`;
@@ -471,7 +501,8 @@ async function verAlunosParaNotas() {
                                 return avs.map((av, index) => {
                                     const isFirstInTrimestre = index === 0;
                                     const dividerClass = isFirstInTrimestre ? 'trimestre-divider' : '';
-                                    return `<th class="nota-header ${dividerClass}" data-trimestre="${av.trimestre}">${av.descricao} <button class="btn-excluir-aval" data-desc="${av.descricao}">&times;</button></th>`;
+                                    return `<th class="nota-header ${dividerClass}" data-trimestre="${av.trimestre}">${av.descricao} <button class="btn-excluir-aval" data-desc="${av.descricao}">&times;
+                                    </button></th>`;
                                 }).join('');
                             }).join('')}
                         </tr>
@@ -754,9 +785,10 @@ function mostrarSecaoAluno(secao) {
 
     if (secao === 'notas') {
         renderizarNotasAluno();
-    } else {
+    } else if (secao === 'faltas') {
         renderizarFaltasAluno();
     }
+    // Não é necessário renderizar Tarefas, pois o HTML já contém o placeholder inicial.
 }
 
 function renderizarNotasAluno() {
@@ -764,6 +796,7 @@ function renderizarNotasAluno() {
     const materiaSelecionada = document.getElementById('filtroMateriaNotas').value;
     const trimestreSelecionado = document.getElementById('filtroTrimestreNotas').value;
 
+    // 1. Filtrar as notas
     const notasFiltradas = dadosCompletosAluno.notas.filter(nota => {
         const porMateria = materiaSelecionada === 'todos' || nota.materia === materiaSelecionada;
         const porTrimestre = trimestreSelecionado === 'todos' || nota.trimestre == trimestreSelecionado;
@@ -775,102 +808,223 @@ function renderizarNotasAluno() {
         return;
     }
 
-    const notasAgrupadasPorMateria = notasFiltradas.reduce((acc, nota) => {
-        if (!acc[nota.materia]) {
-            acc[nota.materia] = [];
-        }
-        acc[nota.materia].push(nota);
-        return acc;
-    }, {});
-
     let html = '';
-    for (const materia in notasAgrupadasPorMateria) {
-        const notasDaMateria = notasAgrupadasPorMateria[materia];
 
-        const notasPorTrimestre = notasDaMateria.reduce((acc, nota) => {
-            if (!acc[nota.trimestre]) {
-                acc[nota.trimestre] = [];
+    // =========================================================================
+    // CASE 1: FILTRO POR TRIMESTRE (e Matéria é 'todos') -> Matéria x Avaliação
+    // =========================================================================
+    if (trimestreSelecionado !== 'todos' && materiaSelecionada === 'todos') {
+        // Agrupar por Matéria para obter a lista de matérias na linha
+        const notasAgrupadasPorMateria = notasFiltradas.reduce((acc, nota) => {
+            const materia = nota.materia;
+            if (!acc[materia]) {
+                acc[materia] = { nome: materia, avaliacoes: [] };
             }
-            acc[nota.trimestre].push(parseFloat(nota.nota));
+            // Adiciona a nota completa (que inclui descrição)
+            acc[materia].avaliacoes.push(nota);
+            return acc;
+        }, {});
+
+        // Coletar todas as descrições de avaliações únicas (colunas)
+        const avaliacoesUnicasSet = new Set(notasFiltradas.map(n => n.descricao));
+        const avaliacoesUnicas = Array.from(avaliacoesUnicasSet).sort();
+
+        html = `
+            <div class="resumo-media">Notas do ${trimestreSelecionado}º Trimestre (Matéria x Avaliação)</div>
+            <div class="tabela-notas-container">
+                <table class="tabela-notas-aluno">
+                    <thead>
+                        <tr>
+                            <th>Matéria</th>
+                            ${avaliacoesUnicas.map(desc => `<th>${desc}</th>`).join('')}
+                            <th>Média Trimestral</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${Object.keys(notasAgrupadasPorMateria).sort().map(materiaKey => {
+                            const dadosMateria = notasAgrupadasPorMateria[materiaKey];
+                            const nomeMateria = dadosMateria.nome.charAt(0).toUpperCase() + dadosMateria.nome.slice(1);
+                            
+                            let notasDoTrimestre = []; // Para calcular a média
+                            
+                            const rowData = avaliacoesUnicas.map(desc => {
+                                // Encontra a nota para esta descrição
+                                const notaObj = dadosMateria.avaliacoes.find(n => n.descricao === desc);
+                                const nota = notaObj ? parseFloat(notaObj.nota) : '---';
+                                // Só adiciona ao cálculo da média se for um número válido
+                                if (nota !== '---' && !isNaN(nota)) notasDoTrimestre.push(nota);
+                                return `<td>${nota !== '---' ? nota.toFixed(1) : '---'}</td>`;
+                            }).join('');
+
+                            const mediaTrimestral = notasDoTrimestre.length > 0
+                                ? (notasDoTrimestre.reduce((sum, n) => sum + n, 0) / notasDoTrimestre.length).toFixed(1)
+                                : '---';
+                            
+                            return `
+                                <tr>
+                                    <td>${nomeMateria}</td>
+                                    ${rowData}
+                                    <td>${mediaTrimestral}</td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    } 
+    // =========================================================================
+    // CASE 2: FILTRO POR MATÉRIA (e Trimestre é 'todos') -> Avaliação x Trimestre
+    // =========================================================================
+    else if (materiaSelecionada !== 'todos' && trimestreSelecionado === 'todos') {
+        const nomeMateria = materiaSelecionada.charAt(0).toUpperCase() + materiaSelecionada.slice(1);
+        
+        // Coletar todas as descrições de avaliações únicas (linhas)
+        const avaliacoesUnicasSet = new Set(notasFiltradas.map(n => n.descricao));
+        const avaliacoesUnicas = Array.from(avaliacoesUnicasSet).sort();
+
+        // Agrupar por Descrição para facilitar o preenchimento das linhas
+        const notasAgrupadasPorDescricao = notasFiltradas.reduce((acc, nota) => {
+            if (!acc[nota.descricao]) {
+                acc[nota.descricao] = { notas: {}, mediasTrimestrais: [] };
+            }
+            const notaValor = parseFloat(nota.nota);
+            acc[nota.descricao].notas[String(nota.trimestre)] = notaValor;
+            return acc;
+        }, {});
+
+        const trimestresPadrao = ['1', '2', '3'];
+        let notasParaMediaFinal = {}; // {trimestre: [notas]} para calcular as médias trimestrais
+
+        html = `
+            <div class="resumo-media">Notas de ${nomeMateria} (Avaliação x Trimestre)</div>
+            <div class="tabela-notas-container">
+                <table class="tabela-notas-aluno">
+                    <thead>
+                        <tr>
+                            <th>Avaliação</th>
+                            <th>1º Trimestre</th>
+                            <th>2º Trimestre</th>
+                            <th>3º Trimestre</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${avaliacoesUnicas.map(descricao => {
+                            const dadosAvaliacao = notasAgrupadasPorDescricao[descricao];
+                            
+                            const rowData = trimestresPadrao.map(trimestre => {
+                                const nota = dadosAvaliacao.notas[trimestre];
+                                if (nota !== undefined) {
+                                    if (!notasParaMediaFinal[trimestre]) notasParaMediaFinal[trimestre] = [];
+                                    // Adiciona as notas de cada avaliação para calcular a média do trimestre
+                                    notasParaMediaFinal[trimestre].push(nota); 
+                                }
+                                return `<td>${nota !== undefined ? nota.toFixed(1) : '---'}</td>`;
+                            }).join('');
+                            
+                            return `
+                                <tr>
+                                    <td>${descricao}</td>
+                                    ${rowData}
+                                </tr>
+                            `;
+                        }).join('')}
+                        <tr>
+                           <td style="font-weight: bold;">Média Trimestral</td>
+                           ${trimestresPadrao.map(trimestre => {
+                               const notas = notasParaMediaFinal[trimestre] || [];
+                               const media = notas.length > 0
+                                   ? (notas.reduce((sum, n) => sum + n, 0) / notas.length).toFixed(1)
+                                   : '---';
+                               return `<td style="font-weight: bold;">${media}</td>`;
+                           }).join('')}
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        `;
+    } 
+    // =========================================================================
+    // CASE 3: SEM FILTRO (ou filtros mistos) -> Matéria x Trimestre (Report Card)
+    // Este é o layout padrão Boletim Escolar
+    // =========================================================================
+    else {
+        // Agrupar notas por Matéria e Trimestre e calcular as médias
+        const notasAgrupadasPorMateria = notasFiltradas.reduce((acc, nota) => {
+            const materia = nota.materia;
+            const trimestre = String(nota.trimestre);
+            if (!acc[materia]) {
+                acc[materia] = { notasPorTrimestre: {} };
+            }
+            if (!acc[materia].notasPorTrimestre[trimestre]) {
+                acc[materia].notasPorTrimestre[trimestre] = [];
+            }
+            acc[materia].notasPorTrimestre[trimestre].push(parseFloat(nota.nota));
             return acc;
         }, {});
         
-        let mediasTrimestrais = [];
-        for (const trimestre in notasPorTrimestre) {
-            const notas = notasPorTrimestre[trimestre];
-            const mediaTrimestre = notas.reduce((sum, nota) => sum + nota, 0) / notas.length;
-            mediasTrimestrais.push(mediaTrimestre);
+        // Define o título do bloco
+        const titulo = (materiaSelecionada !== 'todos' && trimestreSelecionado !== 'todos') 
+            ? `Notas de ${materiaSelecionada.charAt(0).toUpperCase() + materiaSelecionada.slice(1)} no ${trimestreSelecionado}º Trimestre`
+            : 'BOLETIM ESCOLAR SIMPLIFICADO';
+
+        html = `
+            <div class="resumo-media">${titulo}</div>
+            <div class="tabela-notas-container">
+                <table class="tabela-notas-aluno">
+                    <thead>
+                        <tr>
+                            <th>Componentes Curriculares</th>
+                            <th>1º Trimestre</th>
+                            <th>2º Trimestre</th>
+                            <th>3º Trimestre</th>
+                            <th>Média Final</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+
+        for (const materia in notasAgrupadasPorMateria) {
+            const dadosMateria = notasAgrupadasPorMateria[materia];
+            const nomeMateria = materia.charAt(0).toUpperCase() + materia.slice(1);
+            const trimestresPadrao = ['1', '2', '3'];
+            let todasMediasTrimestrais = []; // Para calcular a média final (apenas trimestres válidos)
+
+            const rowData = trimestresPadrao.map(trimestre => {
+                const notas = dadosMateria.notasPorTrimestre[trimestre];
+                let cellContent = '---';
+                
+                if (notas && notas.length > 0) {
+                    const mediaTrimestre = notas.reduce((sum, n) => sum + n, 0) / notas.length;
+                    cellContent = mediaTrimestre.toFixed(1);
+                    todasMediasTrimestrais.push(mediaTrimestre); // Adiciona para o cálculo da média final
+                }
+                
+                return `<td>${cellContent}</td>`;
+            }).join('');
+
+            // 3. Calcular Média Final (Média de todos os trimestres com nota)
+            const mediaFinalMateria = todasMediasTrimestrais.length > 0
+                ? todasMediasTrimestrais.reduce((sum, m) => sum + m, 0) / todasMediasTrimestrais.length
+                : '---';
+            const finalCell = mediaFinalMateria !== '---' ? `<td>${mediaFinalMateria.toFixed(1)}</td>` : `<td>---</td>`;
+
+            html += `
+                <tr>
+                    <td>${nomeMateria}</td>
+                    ${rowData}
+                    ${finalCell}
+                </tr>
+            `;
         }
 
-        const mediaFinal = mediasTrimestrais.length > 0
-            ? mediasTrimestrais.reduce((sum, media) => sum + media, 0) / mediasTrimestrais.length
-            : null;
-
-        const avaliacoesUnicas = Array.from(new Set(notasDaMateria.map(av => JSON.stringify({
-            descricao: av.descricao,
-            trimestre: av.trimestre
-        })))).map(s => JSON.parse(s));
-
-        const avaliacoesPorTrimestre = {};
-        avaliacoesUnicas.forEach(av => {
-            if (!avaliacoesPorTrimestre[av.trimestre]) {
-                avaliacoesPorTrimestre[av.trimestre] = [];
-            }
-            avaliacoesPorTrimestre[av.trimestre].push(av);
-        });
-
-        const trimestresOrdenados = Object.keys(avaliacoesPorTrimestre).sort();
-        
-        const nomeMateria = materia.charAt(0).toUpperCase() + materia.slice(1);
-        
         html += `
-            <div class="materia-bloco">
-                <h3>${nomeMateria}</h3>
-                <div class="tabela-notas-container">
-                    <table class="tabela-notas-aluno">
-                        <thead>
-                            <tr>
-                                <th rowspan="2">Avaliação</th>
-                                ${trimestresOrdenados.map(trimestre => {
-                                    const avs = avaliacoesPorTrimestre[trimestre];
-                                    return `<th colspan="${avs.length}" class="trimestre-header">${trimestre}º Trimestre</th>`;
-                                }).join('')}
-                                <th rowspan="2">Média Final</th>
-                            </tr>
-                            <tr>
-                                ${trimestresOrdenados.map(trimestre => {
-                                    const avs = avaliacoesPorTrimestre[trimestre];
-                                    return avs.map((av, index) => {
-                                        const isFirstInTrimestre = index === 0;
-                                        const dividerClass = isFirstInTrimestre ? 'trimestre-divider' : '';
-                                        return `<th class="nota-header ${dividerClass}" data-trimestre="${av.trimestre}">${av.descricao} <button class="btn-excluir-aval" data-desc="${av.descricao}">&times;</button></th>`;
-                                    }).join('');
-                                }).join('')}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td>Notas</td>
-                                ${trimestresOrdenados.map(trimestre => {
-                                    const avaliacoesDoTrimestre = avaliacoesPorTrimestre[trimestre] || [];
-                                    return avaliacoesDoTrimestre.map((avUnica, index) => {
-                                        // Correção anterior: Garante que o trimestre seja comparado como string para maior compatibilidade.
-                                        const nota = notasDaMateria.find(n => 
-                                            n.descricao === avUnica.descricao && String(n.trimestre) === String(avUnica.trimestre)
-                                        )?.nota || '---';
-                                        const isFirstInTrimestre = index === 0;
-                                        const dividerClass = isFirstInTrimestre ? 'trimestre-divider' : '';
-                                        return `<td class="${dividerClass}" data-trimestre="${avUnica.trimestre}">${nota}</td>`;
-                                    }).join('');
-                                }).join('')}
-                                <td class="media-final">${mediaFinal !== null ? mediaFinal.toFixed(2) : '---'}</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
+                    </tbody>
+                </table>
             </div>
         `;
     }
+
     conteudoNotas.innerHTML = html;
 }
 
@@ -878,7 +1032,7 @@ function renderizarFaltasAluno() {
     const conteudoFaltas = document.getElementById('conteudoFaltasAluno');
     const materiaSelecionada = document.getElementById('filtroMateriaFaltas').value;
     
-    // Filtragem estrita para garantir que p.materia é válido antes de prosseguir
+    // 1. Filtrar registros de presença/falta
     const presencasFiltradas = dadosCompletosAluno.presencas.filter(p => {
         if (!p.materia || typeof p.materia !== 'string') {
             return false;
@@ -891,144 +1045,97 @@ function renderizarFaltasAluno() {
         return;
     }
 
-    const presencasAgrupadasPorMateria = presencasFiltradas.reduce((acc, p) => {
+    // 2. Agrupar faltas por Matéria e Trimestre
+    const faltasAgrupadas = presencasFiltradas.reduce((acc, p) => {
         const materia = p.materia;
+        // Inferir o trimestre a partir da data de presença
+        const trimestre = getTrimestreFromDate(p.data);
+
         if (!acc[materia]) {
-            acc[materia] = [];
+            acc[materia] = { '1': 0, '2': 0, '3': 0, 'total': 0 };
         }
-        acc[materia].push(p);
+
+        if (p.status === 'falta' && trimestre) {
+            acc[materia][trimestre] += 1;
+            acc[materia]['total'] += 1;
+        }
         return acc;
     }, {});
+    
+    const materiasParaExibir = Object.keys(faltasAgrupadas).sort();
 
-    let html = '';
-    for (const materia in presencasAgrupadasPorMateria) {
+    let html = `
+        <div class="resumo-media">Resumo de Faltas por Trimestre</div>
+        <div class="tabela-notas-container">
+            <table class="tabela-notas-aluno">
+                <thead>
+                    <tr>
+                        <th>Matéria</th>
+                        <th>1º Trimestre</th>
+                        <th>2º Trimestre</th>
+                        <th>3º Trimestre</th>
+                        <th>Total de Faltas</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+
+    // 3. Gerar as linhas da tabela
+    materiasParaExibir.forEach(materia => {
         const nomeMateria = materia.charAt(0).toUpperCase() + materia.slice(1);
-        const presencasDaMateria = presencasAgrupadasPorMateria[materia];
-        const faltas = presencasDaMateria.filter(p => p.status === 'falta').length;
+        const dadosFaltas = faltasAgrupadas[materia];
+        const totalFaltas = dadosFaltas.total;
         
-        // Renderiza a estrutura da matéria
+        // Cor vermelha para o total de faltas (> 0) e verde/primária para 0 faltas
+        const corTotalFaltas = totalFaltas > 0 ? '#F44336' : '#167D7F';
+        
         html += `
-            <div class="materia-bloco">
-                <h3>${nomeMateria}</h3>
-                <h4>Total de Faltas: ${faltas}</h4>
-                <div id="calendario-materia-${materia}" class="calendario-faltas"></div>
-            </div>
+            <tr>
+                <td>${nomeMateria}</td>
+                <td>${dadosFaltas['1']}</td>
+                <td>${dadosFaltas['2']}</td>
+                <td>${dadosFaltas['3']}</td>
+                <td style="font-weight: bold; color: ${corTotalFaltas};">${totalFaltas}</td>
+            </tr>
         `;
-    }
+    });
+
+    html += `
+                </tbody>
+            </table>
+        </div>
+    `;
 
     conteudoFaltas.innerHTML = html;
-
-    for (const materia in presencasAgrupadasPorMateria) {
-        const presencasDaMateria = presencasAgrupadasPorMateria[materia];
-        const calendarioDiv = document.getElementById(`calendario-materia-${materia}`);
-        renderizarCalendarioFaltas(calendarioDiv, presencasDaMateria);
-    }
-}
-
-function renderizarCalendarioFaltas(container, presencas) {
-    // A API backend retorna o campo 'data' como um objeto Date (ex: 2025-09-26T03:00:00.000Z)
-    let dataInicial;
-    if (presencas.length > 0) {
-        // Usa o objeto Date retornado para inicializar o calendário
-        dataInicial = new Date(presencas[0].data); 
-    } else {
-        dataInicial = new Date();
-    }
-
-    let ano = dataInicial.getFullYear();
-    let mes = dataInicial.getMonth();
-
-    function desenharCalendario(ano, mes) {
-        const diasNoMes = new Date(ano, mes + 1, 0).getDate();
-        const primeiroDiaSemana = new Date(ano, mes, 1).getDay();
-        const nomesMeses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-        const nomesSemanas = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-
-        container.innerHTML = '';
-
-        const header = document.createElement('div');
-        header.className = 'calendario-header';
-        // Atualiza a chamada para MudarMesCalendario para passar os parâmetros atuais
-        header.innerHTML = `
-            <button onclick="mudarMesCalendario('${container.id}', -1, ${ano}, ${mes})">&lt;</button>
-            <span>${nomesMeses[mes]} ${ano}</span>
-            <button onclick="mudarMesCalendario('${container.id}', 1, ${ano}, ${mes})">&gt;</button>
-        `;
-        container.appendChild(header);
-
-        const diasSemanaDiv = document.createElement('div');
-        diasSemanaDiv.className = 'calendario-dias-semana';
-        nomesSemanas.forEach(dia => {
-            const div = document.createElement('div');
-            div.textContent = dia;
-            diasSemanaDiv.appendChild(div);
-        });
-        container.appendChild(diasSemanaDiv);
-        
-        for (let i = 0; i < primeiroDiaSemana; i++) {
-            const div = document.createElement('div');
-            div.className = 'calendario-dia dia-inativo';
-            container.appendChild(div);
-        }
-
-        for (let dia = 1; dia <= diasNoMes; dia++) {
-            // Reconstruir a string YYYY-MM-DD localmente para comparação
-            const mesStr = (mes + 1).toString().padStart(2, '0');
-            const diaStr = dia.toString().padStart(2, '0');
-            const dataFormatada = `${ano}-${mesStr}-${diaStr}`;
-            
-            // Correção anterior: Usar métodos UTC para evitar o desvio de fuso horário local.
-            const registro = presencas.find(p => {
-                const dbDate = new Date(p.data);
-                const utcYear = dbDate.getUTCFullYear();
-                const utcMonth = (dbDate.getUTCMonth() + 1).toString().padStart(2, '0');
-                const utcDay = dbDate.getUTCDate().toString().padStart(2, '0');
-                const utcDateString = `${utcYear}-${utcMonth}-${utcDay}`;
-                
-                return utcDateString === dataFormatada;
-            });
-
-            const div = document.createElement('div');
-            div.className = 'calendario-dia';
-            div.textContent = dia;
-
-            if (registro) {
-                if (registro.status === 'presente') {
-                    div.classList.add('dia-presente');
-                } else if (registro.status === 'falta') {
-                    div.classList.add('dia-falta');
-                }
-            }
-            container.appendChild(div);
-        }
-    }
-
-    // Função global que recebe as variáveis de controle (ano e mês)
-    window.mudarMesCalendario = (containerId, delta, currentAno, currentMes) => {
-        let newMes = currentMes + delta;
-        let newAno = currentAno;
-
-        if (newMes < 0) {
-            newMes = 11;
-            newAno--;
-        } else if (newMes > 11) {
-            newMes = 0;
-            newAno++;
-        }
-        
-        const containerEl = document.getElementById(containerId);
-        if (containerEl) {
-             // Redesenha com o novo contexto de data.
-             desenharCalendario(newAno, newMes); 
-        }
-    };
-
-    desenharCalendario(ano, mes);
 }
 
 // ===============================
 // FUNÇÕES AUXILIARES
 // ===============================
+
+/**
+ * Inferir o trimestre com base no mês de uma data.
+ * Nota: Esta é uma divisão acadêmica simplificada (Jan-Abr: 1º, Mai-Ago: 2º, Set-Dez: 3º).
+ * @param {string} dateString - Data no formato string (ex: '2025-09-26T03:00:00.000Z')
+ * @returns {string|null} O número do trimestre ('1', '2', '3') ou null se inválido.
+ */
+function getTrimestreFromDate(dateString) {
+    // Usar a data local para instanciar, mas métodos UTC para consistência
+    const date = new Date(dateString);
+    const month = date.getUTCMonth() + 1; // getUTCMonth retorna 0-11
+
+    // Divisão simplificada:
+    if (month >= 1 && month <= 4) {
+        return '1'; // 1º Trimestre (Jan, Fev, Mar, Abr)
+    } else if (month >= 5 && month <= 8) {
+        return '2'; // 2º Trimestre (Mai, Jun, Jul, Ago)
+    } else if (month >= 9 && month <= 12) {
+        return '3'; // 3º Trimestre (Set, Out, Nov, Dez)
+    }
+    return null; 
+}
+
+
 function calcularMedia(notas) {
     if (notas.length === 0) return null;
     const notasNumericas = notas.filter(nota => !isNaN(parseFloat(nota))).map(nota => parseFloat(nota));
@@ -1041,7 +1148,7 @@ function calcularMedia(notas) {
 async function apiFetch(endpoint, method = 'GET', body = null, returnResponseObject = false) {
     const token = localStorage.getItem("token");
     if (!token) { logout(); throw new Error("Token não encontrado."); }
-    const options = { method, headers: { 'Authorization': `Bearer ${token}` } };
+    const options = { method, headers: { 'Authorization': `Bearer ${token}` } } ;
     if (body) { options.headers['Content-Type'] = 'application/json'; options.body = JSON.stringify(body); }
     const response = await fetch(`${API_URL}${endpoint}`, options);
     
