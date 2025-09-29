@@ -25,6 +25,135 @@ body {
   max-width: 1200px; /* Aumentado para dashboard */
 }
 
+/* Estilos de Layout Admin (Sidebar) */
+.admin-layout {
+  display: flex;
+  padding: 0; /* Remove padding do container principal para o layout ocupar toda a área */
+  max-width: none; /* Permite que o layout use 100% da largura disponível */
+  min-height: 90vh; /* Ocupa a altura da tela */
+}
+
+.admin-sidebar {
+  width: 250px;
+  background-color: #167D7F; /* Cor Primária */
+  color: white;
+  padding: 2rem 1rem;
+  box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  border-radius: 12px 0 0 12px;
+}
+
+.admin-sidebar h1 {
+  color: white;
+  margin-bottom: 2rem;
+  border-bottom: 2px solid #98D7C2;
+  padding-bottom: 1rem;
+  font-size: 1.5rem;
+  text-align: center;
+}
+
+.admin-sidebar button {
+  background: none;
+  border: none;
+  color: white;
+  text-align: left;
+  padding: 0.8rem 1rem;
+  border-radius: 6px;
+  font-weight: 400;
+  transition: background-color 0.2s, box-shadow 0.2s;
+  margin: 0;
+}
+
+.admin-sidebar button:hover:not(.active) {
+  background-color: #29A0B1; /* Azul Claro */
+  box-shadow: none;
+}
+
+.admin-sidebar button.active {
+  background-color: #29A0B1; /* Azul Claro como ativo */
+  font-weight: 600;
+  box-shadow: none;
+}
+
+.admin-sidebar .btn-logout {
+    margin-top: auto; /* Empurra para o final da sidebar */
+    background-color: #F44336; /* Cor de alerta para sair */
+}
+
+.admin-sidebar .btn-logout:hover {
+    background-color: #D32F2F;
+}
+
+.admin-content {
+  flex-grow: 1;
+  padding: 2rem;
+  background: white; /* Fundo branco para o conteúdo principal */
+  border-radius: 0 12px 12px 0;
+}
+
+.admin-content h1 {
+  margin-top: 0;
+}
+
+.painel-actions {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.painel-actions button {
+    margin: 0;
+}
+
+.painel-actions input[type="text"] {
+    max-width: 300px;
+    margin: 0;
+}
+
+.filtros-alunos-admin select {
+    width: auto;
+    margin: 0;
+}
+
+/* Estilos para a Tabela de Dados (Admin) */
+.tabela-admin {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.tabela-admin th, .tabela-admin td {
+    border: 1px solid #98D7C2;
+    padding: 1rem;
+    text-align: left;
+}
+
+.tabela-admin th {
+    background-color: #167D7F; /* Azul Petróleo para cabeçalho */
+    color: white;
+    font-weight: 600;
+    cursor: default; /* Remove cursor de ordenação, pois o JS não implementa */
+}
+
+.tabela-admin tr:nth-child(even) {
+    background-color: #F7FCFA; /* Listras leves */
+}
+
+.tabela-admin tbody tr:hover {
+    background-color: #DDFFE7; /* Verde Claro para hover */
+}
+
+.tabela-admin td > div {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end; /* Alinha os botões à direita */
+}
+
 h1 { color: #29A0B1; margin-bottom: 1.5rem; border-bottom: 2px solid #98D7C2; padding-bottom: 0.5rem; }
 h2 { margin: 1.5rem 0 1rem; color: #167D7F; }
 h3 { color: #29A0B1; margin-top: 1rem; }
@@ -153,7 +282,7 @@ li button {
   margin: 0; /* Remove margem */
 }
 
-/* Componente de Seleção Múltipla com Tags */
+/* Componente de Seleção Múltipla com Tags (Admin) */
 .multi-select-container {
   border: 1px solid #98D7C2;
   border-radius: 6px;
@@ -166,14 +295,15 @@ li button {
 }
 
 .tag-item {
-  background-color: #98D7C2;
-  color: #167D7F;
-  padding: 0.3rem 0.6rem;
-  border-radius: 4px;
+  background-color: #167D7F; /* Fundo com cor primária */
+  color: white; /* Texto branco */
+  padding: 0.4rem 0.7rem; /* Aumenta um pouco o padding */
+  border-radius: 16px; /* Mais arredondado (chip) */
   display: flex;
   align-items: center;
   font-size: 0.9rem;
-  font-weight: 600;
+  font-weight: 500;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
 }
 
 .remove-tag {
@@ -181,11 +311,11 @@ li button {
   margin-left: 0.5rem;
   font-weight: bold;
   cursor: pointer;
-  color: #D32F2F;
+  color: #DDFFE7; /* Cor do fundo claro */
   transition: color 0.3s;
 }
 .remove-tag:hover {
-    color: #A94442;
+    color: white;
 }
 
 #turmas-select {
@@ -195,7 +325,7 @@ li button {
   outline: none;
 }
 
-/* Estilos para o Formulário de Chamada */
+/* Estilos para o Formulário de Chamada (Professor) */
 .chamada-item {
   display: flex;
   justify-content: space-between;
@@ -211,7 +341,17 @@ li button {
 
 .chamada-options label {
   cursor: pointer;
-  font-weight: normal; /* Normaliza o peso da fonte no label do rádio */
+  font-weight: normal; 
+  color: #F44336; /* Destaca o "Marcar Falta" em vermelho */
+  font-weight: 600;
+}
+
+/* Estilo para o Checkbox/Toggle Switch (simplificado como checkbox grande) */
+.chamada-options input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    margin: 0;
+    accent-color: #F44336; /* Cor do checkbox (vermelho) */
 }
 
 #dataChamada {
@@ -256,6 +396,18 @@ li button {
   padding: 0.4rem;
   margin: 0 auto; /* Centraliza no TD */
   text-align: center;
+}
+
+/* Destaque para Média Final do Professor */
+.media-destaque-header {
+    background-color: #167D7F !important;
+    color: #DDFFE7 !important; /* Texto mais claro para contraste */
+}
+.media-destaque {
+    background-color: #DDFFE7 !important; /* Verde Claro (Fundo) */
+    font-weight: 700 !important;
+    color: #167D7F !important; /* Azul Petróleo (Primária) */
+    border-left: 2px solid #167D7F !important;
 }
 
 #form-lancar-em-lote h4 {
@@ -358,6 +510,7 @@ li button {
     padding: 1rem;
     background-color: #F7FCFA;
     border-radius: 8px;
+    flex-wrap: wrap;
 }
 
 .filtros-aluno select {
@@ -459,4 +612,75 @@ li button {
     padding: 0.5rem 0;
     /* Linha sutil para separar do título, se necessário */
     /* border-bottom: 1px solid #98D7C2; */
+}
+
+/* SUGESTÃO ALUNO: Painel de Resumo/KPI */
+.aluno-resumo {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    margin-bottom: 2rem;
+    padding: 1.5rem;
+    background-color: #DDFFE7; /* Cor de fundo claro */
+    border-radius: 12px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+}
+
+.kpi-item {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #167D7F; /* Azul Petróleo */
+    text-align: center;
+}
+
+/* SUGESTÃO ALUNO: Cores de Destaque nas Células de Notas */
+.nota-aprovado {
+    background-color: #4CAF5033; /* Verde Claro transparente */
+    color: #167D7F; /* Cor de texto padrão para legibilidade */
+    font-weight: 600;
+}
+
+.nota-recuperacao {
+    background-color: #FFC10733; /* Amarelo Claro transparente */
+    color: #167D7F;
+    font-weight: 600;
+}
+
+.nota-reprovado {
+    background-color: #F4433633; /* Vermelho Claro transparente */
+    color: #167D7F;
+    font-weight: 600;
+}
+
+/* SUGESTÃO ALUNO: Lista Detalhada de Faltas */
+.lista-faltas-detalhada {
+    margin-top: 1.5rem;
+    padding: 1rem;
+    border: 1px solid #98D7C2;
+    border-radius: 8px;
+    background-color: #f7fcf7;
+}
+
+.lista-faltas-detalhada h4 {
+    color: #167D7F;
+    margin-top: 0;
+    border-bottom: 1px solid #98D7C2;
+    padding-bottom: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.lista-faltas-detalhada ul {
+    list-style: none;
+    padding: 0;
+}
+
+.lista-faltas-detalhada li {
+    padding: 0.5rem 0;
+    border-bottom: 1px dotted #98D7C2;
+    display: flex;
+    justify-content: space-between;
+}
+
+.lista-faltas-detalhada li:last-child {
+    border-bottom: none;
 }

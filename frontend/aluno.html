@@ -12,6 +12,10 @@
     <h2>Minha Turma</h2>
     <p id="turmaAluno">Carregando...</p>
     
+    <div id="alunoResumo" class="aluno-resumo">
+        <div id="kpiMedia" class="kpi-item">Média Final: ---</div>
+        <div id="kpiFaltas" class="kpi-item">Faltas Totais: ---</div>
+    </div>
     <nav class="aluno-nav">
       <button onclick="mostrarSecaoAluno('notas')" class="active">Notas</button>
       <button onclick="mostrarSecaoAluno('faltas')">Faltas</button>
@@ -20,9 +24,9 @@
     <section id="secaoNotas" class="painel-aluno">
       <h2>Minhas Notas</h2>
       <div class="filtros-aluno">
-        <label for="filtroMateriaNotas">Matéria:</label>
+        <label for="filtroMateriaNotas">Filtrar por Matéria:</label>
         <select id="filtroMateriaNotas" onchange="renderizarNotasAluno()"></select>
-        <label for="filtroTrimestreNotas">Trimestre:</label>
+        <label for="filtroTrimestreNotas">Filtrar por Trimestre:</label>
         <select id="filtroTrimestreNotas" onchange="renderizarNotasAluno()"></select>
       </div>
       <div id="conteudoNotasAluno">
@@ -33,7 +37,7 @@
     <section id="secaoFaltas" class="painel-aluno hidden">
       <h2>Minhas Faltas</h2>
       <div class="filtros-aluno">
-        <label for="filtroMateriaFaltas">Matéria:</label>
+        <label for="filtroMateriaFaltas">Filtrar por Matéria:</label>
         <select id="filtroMateriaFaltas" onchange="renderizarFaltasAluno()"></select>
       </div>
       <div id="conteudoFaltasAluno">

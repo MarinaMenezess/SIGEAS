@@ -7,35 +7,51 @@
   <script defer src="script.js"></script>
 </head>
 <body id="page-admin">
-  <div class="container">
-    <h1>Painel do Administrador</h1>
-    <nav class="aluno-nav"> <button onclick="mostrarSecao('turmas')">Gerenciar Turmas</button>
+  <div class="container admin-layout">
+    <nav id="admin-sidebar" class="admin-sidebar">
+      <h1>SIGEAS Admin</h1>
+      <button onclick="mostrarSecao('turmas')" class="active">Gerenciar Turmas</button>
       <button onclick="mostrarSecao('professores')">Gerenciar Professores</button>
       <button onclick="mostrarSecao('alunos')">Gerenciar Alunos</button>
-      <button onclick="logout()">Sair</button>
+      <button onclick="logout()" class="btn-logout">Sair</button>
     </nav>
+    <main class="admin-content">
+      <h1>Painel do Administrador</h1>
 
-    <section id="turmas" class="painel">
-      <h2>Turmas</h2>
-      <button onclick="abrirModalTurma()">Criar Nova Turma</button>
-      <ul id="listaTurmas"></ul>
-    </section>
+      <section id="turmas" class="painel">
+        <h2>Turmas</h2>
+        <div class="painel-actions">
+          <button onclick="abrirModalTurma()">Criar Nova Turma</button>
+        </div>
+        <div class="tabela-container">
+          <table id="tabelaTurmas" class="tabela-admin"></table>
+        </div>
+      </section>
 
-    <section id="professores" class="painel hidden">
-      <h2>Professores</h2>
-      <button onclick="abrirModalUsuario('professor')">Cadastrar Novo Professor</button>
-      <ul id="listaProfessores"></ul>
-    </section>
+      <section id="professores" class="painel hidden">
+        <h2>Professores</h2>
+        <div class="painel-actions">
+          <input type="text" id="filtroProfessor" placeholder="Pesquisar por Nome/Email..." onkeyup="filtrarTabela('professor')">
+          <button onclick="abrirModalUsuario('professor')">Cadastrar Novo Professor</button>
+        </div>
+        <div class="tabela-container">
+          <table id="tabelaProfessores" class="tabela-admin"></table>
+        </div>
+      </section>
 
-    <section id="alunos" class="painel hidden">
-      <h2>Alunos</h2>
-      <div style="margin-bottom: 1rem; display: flex; gap: 1rem; align-items: center;">
-        <label for="filtroTurmaAluno">Filtrar por Turma:</label>
-        <select id="filtroTurmaAluno" onchange="carregarUsuarios('aluno', this.value)"></select>
-        <button onclick="abrirModalUsuario('aluno')">Cadastrar Novo Aluno</button>
-      </div>
-      <ul id="listaAlunos"></ul>
-    </section>
+      <section id="alunos" class="painel hidden">
+        <h2>Alunos</h2>
+        <div class="painel-actions filtros-alunos-admin" style="margin-bottom: 1rem;">
+          <label for="filtroTurmaAluno">Filtrar por Turma:</label>
+          <select id="filtroTurmaAluno" onchange="carregarUsuarios('aluno', this.value)"></select>
+          <input type="text" id="filtroAluno" placeholder="Pesquisar por Nome/Email..." onkeyup="filtrarTabela('aluno')">
+          <button onclick="abrirModalUsuario('aluno')">Cadastrar Novo Aluno</button>
+        </div>
+        <div class="tabela-container">
+          <table id="tabelaAlunos" class="tabela-admin"></table>
+        </div>
+      </section>
+    </main>
   </div>
 
   <div id="admin-modal" class="modal-overlay">

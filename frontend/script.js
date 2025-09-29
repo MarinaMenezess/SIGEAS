@@ -189,6 +189,7 @@ function popularMultiSelect(turmasAtuais) {
         tag.className = 'tag-item';
         tag.dataset.turma = turma.id_turma;
         tag.dataset.materia = turma.materia;
+        // Assume que a turma.nome não está disponível na resposta da API /usuarios/:id/turmas, então usa o id e a matéria.
         tag.innerHTML = `<span>Turma ${turma.id_turma} - ${turma.materia}</span><span class="remove-tag" onclick="this.parentElement.remove()">&times;</span>`;
         tagsContainer.appendChild(tag);
     });
@@ -199,34 +200,93 @@ function popularMultiSelect(turmasAtuais) {
 // ===============================
 // ATUALIZADO: Carrega turmas primeiro para cache e filtros
 async function carregarDadosAdmin() { 
+    // Garante que o primeiro botão da sidebar esteja ativo
+    document.querySelector('.admin-sidebar button').classList.add('active');
     await carregarTurmas(); 
     await carregarUsuarios('professor'); 
     await carregarUsuarios('aluno'); 
 }
 
-function mostrarSecao(secao) { document.querySelectorAll('.painel').forEach(s => s.id === secao ? s.classList.remove('hidden') : s.classList.add('hidden')); }
+function mostrarSecao(secao) { 
+    // Atualiza o estado ativo da sidebar
+    document.querySelectorAll('.admin-sidebar button').forEach(btn => {
+        if (btn.onclick && btn.onclick.toString().includes(`mostrarSecao('${secao}')`)) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+    
+    // Mostra/Esconde seções
+    document.querySelectorAll('.painel').forEach(s => s.id === secao ? s.classList.remove('hidden') : s.classList.add('hidden')); 
+}
 
+// ATUALIZADO: Renderiza em tabela.
 async function carregarTurmas() {
     try {
         const turmas = await (await apiFetch('/turmas'));
         turmasCache = turmas; // Armazena globalmente
-        // MODIFICADO: Removido exibição do professor
-        document.getElementById("listaTurmas").innerHTML = turmas.map(turma => `<li><span>${turma.nome} (${turma.ano})</span><div><button onclick='abrirModalTurma(${JSON.stringify(turma)})'>Editar</button><button onclick="excluirTurma(${turma.id_turma})">Excluir</button></div></li>`).join('');
-    } catch (e) { console.error(e) }
+        
+        const tabelaEl = document.getElementById("tabelaTurmas");
+        
+        let tabelaHTML = `
+            <thead>
+                <tr>
+                    <th>Nome da Turma</th>
+                    <th>Descrição</th>
+                    <th>Ano</th>
+                    <th>Professores Associados</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+        `;
+        
+        if (turmas.length === 0) {
+            tabelaHTML += `<tr><td colspan="5">Nenhuma turma cadastrada.</td></tr>`;
+        } else {
+            tabelaHTML += turmas.map(turma => {
+                // professor_nome vem da correção no backend/routes/turmas.js
+                const professores = turma.professor_nome || 'N/A'; 
+                return `
+                    <tr>
+                        <td>${turma.nome}</td>
+                        <td>${turma.descricao || 'Sem descrição'}</td>
+                        <td>${turma.ano}</td>
+                        <td>${professores}</td>
+                        <td>
+                            <div>
+                                <button onclick='abrirModalTurma(${JSON.stringify(turma)})'>Editar</button>
+                                <button onclick="excluirTurma(${turma.id_turma})" class="btn-excluir">Excluir</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+        
+        tabelaHTML += `</tbody>`;
+        tabelaEl.innerHTML = tabelaHTML;
+
+    } catch (e) { 
+        console.error(e);
+        document.getElementById("tabelaTurmas").innerHTML = '<tbody><tr><td colspan="5">Erro ao carregar turmas.</td></tr></tbody>';
+    }
 }
 
 async function excluirTurma(id) {
-    if (!confirm("Tem certeza que deseja excluir esta turma?")) return;
+    if (!confirm("Tem certeza que deseja excluir esta turma? Isso excluirá todas as associações de professores e alunos, chamadas e notas relacionadas.")) return;
     await apiFetch(`/turmas/${id}`, 'DELETE');
     alert('✅ Turma excluída!');
     carregarTurmas();
 }
 
-// ATUALIZADO: Recebe idTurmaFiltro e implementa o filtro para alunos.
+// ATUALIZADO: Recebe idTurmaFiltro e renderiza em tabela com base no perfil.
 async function carregarUsuarios(perfil, idTurmaFiltro = 'todos') {
     try {
         const usuarios = await (await apiFetch('/usuarios'));
-        const listaId = perfil === 'professor' ? 'listaProfessores' : 'listaAlunos';
+        const tabelaId = perfil === 'professor' ? 'tabelaProfessores' : 'tabelaAlunos';
+        const tabelaEl = document.getElementById(tabelaId);
         let usuariosFiltrados = usuarios.filter(u => u.perfil === perfil);
 
         if (perfil === 'aluno') {
@@ -248,15 +308,80 @@ async function carregarUsuarios(perfil, idTurmaFiltro = 'todos') {
             }
         }
         
-        document.getElementById(listaId).innerHTML = usuariosFiltrados.map(usuario => {
-            let infoExtra = '';
-            if (perfil === 'aluno') {
-                infoExtra = `(${usuario.turma_nome || 'Sem turma'})`;
-            }
-            return `<li><span>${usuario.nome} - ${usuario.email} ${infoExtra}</span><div><button onclick='abrirModalUsuario("${perfil}", ${JSON.stringify(usuario)})'>Editar</button></div></li>`;
-        }).join('');
-    } catch (e) { console.error(e) }
+        // Renderiza a tabela
+        let tabelaHTML = `<thead><tr><th>Nome</th><th>Email</th>`;
+        if (perfil === 'aluno') {
+            tabelaHTML += `<th>Turma</th>`;
+        }
+        tabelaHTML += `<th>Ações</th></tr></thead><tbody>`;
+        
+        if (usuariosFiltrados.length === 0) {
+             tabelaHTML += `<tr><td colspan="${perfil === 'aluno' ? 4 : 3}">Nenhum ${perfil} encontrado.</td></tr>`;
+        } else {
+            tabelaHTML += usuariosFiltrados.map(usuario => {
+                let infoExtra = '';
+                if (perfil === 'aluno') {
+                    infoExtra = `<td>${usuario.turma_nome || 'Sem turma'}</td>`;
+                }
+                return `
+                    <tr>
+                        <td>${usuario.nome}</td>
+                        <td>${usuario.email}</td>
+                        ${infoExtra}
+                        <td>
+                            <div>
+                                <button onclick='abrirModalUsuario("${perfil}", ${JSON.stringify(usuario)})'>Editar</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+        
+        tabelaHTML += `</tbody>`;
+        tabelaEl.innerHTML = tabelaHTML;
+
+    } catch (e) { 
+        console.error(e);
+        const tabelaId = perfil === 'professor' ? 'tabelaProfessores' : 'tabelaAlunos';
+        document.getElementById(tabelaId).innerHTML = `<tbody><tr><td colspan="${perfil === 'aluno' ? 4 : 3}">Erro ao carregar usuários.</td></tr></tbody>`;
+    }
 }
+
+/**
+ * Filtra as tabelas de Professor e Aluno em tempo real com base no input de pesquisa.
+ */
+function filtrarTabela(perfil) {
+    const inputId = perfil === 'professor' ? 'filtroProfessor' : 'filtroAluno';
+    const tabelaId = perfil === 'professor' ? 'tabelaProfessores' : 'tabelaAlunos';
+    
+    const input = document.getElementById(inputId);
+    const filter = input.value.toUpperCase();
+    const table = document.getElementById(tabelaId);
+    if (!table.tBodies || table.tBodies.length === 0) return;
+    
+    // Obtém todas as linhas do corpo da tabela, ignorando o cabeçalho
+    const tr = table.tBodies[0].getElementsByTagName("tr");
+    
+    for (let i = 0; i < tr.length; i++) {
+        // Assume que a primeira coluna é Nome e a segunda é Email
+        const nomeCell = tr[i].getElementsByTagName("td")[0]; 
+        const emailCell = tr[i].getElementsByTagName("td")[1]; 
+        
+        if (nomeCell || emailCell) {
+            const nomeText = nomeCell.textContent || nomeCell.innerText;
+            const emailText = emailCell.textContent || emailCell.innerText;
+            
+            // Verifica se o texto de pesquisa está contido no Nome OU no Email
+            if (nomeText.toUpperCase().indexOf(filter) > -1 || emailText.toUpperCase().indexOf(filter) > -1) {
+                tr[i].style.display = "";
+            } else {
+                tr[i].style.display = "none";
+            }
+        }       
+    }
+}
+
 
 // ===============================
 // LÓGICA PARA O PAINEL DO PROFESSOR
@@ -294,6 +419,13 @@ async function carregarDadosProfessor() {
 function selecionarTurma(id_turma, nome_turma, materias) {
     turmaSelecionadaGlobal = { id: id_turma, nome: nome_turma };
     
+    // SUGESTÃO 1: Se houver apenas uma matéria, vai direto para a gestão da matéria.
+    if (materias.length === 1) {
+        // Redireciona imediatamente, chamando a função de gestão da matéria
+        selecionarMateria(materias[0]);
+        return; 
+    }
+
     document.getElementById('listagem').classList.add('hidden');
     document.getElementById('detalhesTurma').classList.remove('hidden');
     document.getElementById('nomeTurmaSelecionada').textContent = `Turma: ${nome_turma}`;
@@ -385,13 +517,27 @@ async function verAlunosParaChamada() {
             listaAlunosChamadaEl.innerHTML = '<li>Nenhum aluno matriculado nesta turma.</li>';
             return;
         }
-        listaAlunosChamadaEl.innerHTML = alunos.map(aluno => `<li class="chamada-item"><span>${aluno.nome}</span><div class="chamada-options"><input type="radio" id="presente_${aluno.id_usuario}" name="aluno_${aluno.id_usuario}" value="presente" checked> <label for="presente_${aluno.id_usuario}">Presente</label><input type="radio" id="falta_${aluno.id_usuario}" name="aluno_${aluno.id_usuario}" value="falta"> <label for="falta_${aluno.id_usuario}">Falta</label></div></li>`).join('');
+        
+        // SUGESTÃO PROFESSOR: Substituir Radio Buttons por Checkbox (Falta)
+        listaAlunosChamadaEl.innerHTML = alunos.map(aluno => `
+            <li class="chamada-item">
+                <span>${aluno.nome}</span>
+                <div class="chamada-options">
+                    <input type="checkbox" id="falta_aluno_${aluno.id_usuario}" name="aluno_${aluno.id_usuario}" value="falta" class="input-falta"> 
+                    <label for="falta_aluno_${aluno.id_usuario}">Marcar Falta</label>
+                </div>
+            </li>
+        `).join('');
+        
         try {
             const presencasDoDia = await (await apiFetch(`/chamadas/turma/${id_turma}/materia/${materiaSelecionadaGlobal}/data/${hoje}`));
             for (const id_aluno in presencasDoDia) {
                 const status = presencasDoDia[id_aluno];
-                const radio = document.querySelector(`input[name="aluno_${id_aluno}"][value="${status}"]`);
-                if (radio) radio.checked = true;
+                // Se o status for 'falta', marca o checkbox. Caso contrário, deixa desmarcado (que representa 'presente').
+                if (status === 'falta') {
+                    const checkbox = document.getElementById(`falta_aluno_${id_aluno}`);
+                    if (checkbox) checkbox.checked = true;
+                }
             }
         } catch (presencaError) {
             console.warn("Não foi possível carregar a chamada para o dia de hoje.");
@@ -408,10 +554,17 @@ async function salvarChamada(event, id_turma) {
     if (!data) return alert('Por favor, selecione uma data para a chamada.');
     const form = event.target;
     const presencas = {};
-    form.querySelectorAll('input[type="radio"]:checked').forEach(radio => {
-        const id_aluno = radio.name.replace('aluno_', '');
-        presencas[id_aluno] = radio.value;
+    
+    // SUGESTÃO PROFESSOR: Coleta de dados com Checkbox
+    form.querySelectorAll('li.chamada-item').forEach(li => {
+        const checkbox = li.querySelector('input[type="checkbox"]');
+        if (!checkbox) return; // Garante que o elemento existe
+        
+        const id_aluno = checkbox.name.replace('aluno_', '');
+        // Se o checkbox estiver marcado, o status é 'falta'. Se não estiver, é 'presente'.
+        presencas[id_aluno] = checkbox.checked ? 'falta' : 'presente'; 
     });
+    
     const payload = { id_turma, materia: materiaSelecionadaGlobal, data, presencas };
     try {
         const response = await apiFetch('/chamadas', 'POST', payload, true);
@@ -493,7 +646,7 @@ async function verAlunosParaNotas() {
                                 const avs = avaliacoesPorTrimestre[trimestre];
                                 return `<th colspan="${avs.length}" class="trimestre-header">${trimestre}º Trimestre</th>`;
                             }).join('')}
-                            <th rowspan="2">Média Final</th>
+                            <th rowspan="2" class="media-destaque-header">Média Final</th>
                         </tr>
                         <tr>
                             ${trimestresOrdenados.map(trimestre => {
@@ -522,7 +675,7 @@ async function verAlunosParaNotas() {
                                         return `<td class="${dividerClass}" data-trimestre="${avUnica.trimestre}">${nota}</td>`;
                                     }).join('');
                                 }).join('')}
-                                <td class="media-final">${aluno.media_final !== null ? aluno.media_final.toFixed(2) : '---'}</td>
+                                <td class="media-final media-destaque">${aluno.media_final !== null ? aluno.media_final.toFixed(2) : '---'}</td>
                             </tr>
                         `).join('')}
                     </tbody>
@@ -706,10 +859,47 @@ async function excluirAvaliacaoPorDescricao(descricao, id_turma) {
 }
 
 // ===============================
-// LÓGICA PARA O PAINEL DO ALUNO
+// LÓGICA PARA O PAINEL DO ALUNO (ATUALIZADO)
 // ===============================
 
 let dadosCompletosAluno = { notas: [], presencas: [] };
+
+/**
+ * Função Auxiliar (SUGESTÃO 1) para calcular Média Final e Total de Faltas
+ */
+function calcularKPIsAluno(notas, presencas) {
+    const notasPorMateria = notas.reduce((acc, nota) => {
+        const materia = nota.materia;
+        const trimestre = String(nota.trimestre);
+        if (!acc[materia]) acc[materia] = { mediasTrimestrais: {} };
+        if (!acc[materia].mediasTrimestrais[trimestre]) acc[materia].mediasTrimestrais[trimestre] = [];
+        acc[materia].mediasTrimestrais[trimestre].push(parseFloat(nota.nota));
+        return acc;
+    }, {});
+
+    let mediasFinaisMateria = [];
+    for (const materia in notasPorMateria) {
+        let mediasTrimestrais = [];
+        for (const trimestre in notasPorMateria[materia].mediasTrimestrais) {
+            const notas = notasPorMateria[materia].mediasTrimestrais[trimestre];
+            const mediaTrimestre = notas.reduce((sum, n) => sum + n, 0) / notas.length;
+            mediasTrimestrais.push(mediaTrimestre);
+        }
+        if (mediasTrimestrais.length > 0) {
+            const mediaFinal = mediasTrimestrais.reduce((sum, m) => sum + m, 0) / mediasTrimestrais.length;
+            mediasFinaisMateria.push(mediaFinal);
+        }
+    }
+
+    const mediaFinalAcumulada = mediasFinaisMateria.length > 0 
+        ? (mediasFinaisMateria.reduce((sum, m) => sum + m, 0) / mediasFinaisMateria.length).toFixed(1)
+        : '---';
+
+    const totalFaltas = presencas.filter(p => p.status === 'falta').length;
+
+    return { mediaFinalAcumulada, totalFaltas };
+}
+
 
 async function carregarDadosAluno() {
     const turmaEl = document.getElementById('turmaAluno');
@@ -731,6 +921,11 @@ async function carregarDadosAluno() {
         // Os dados de presença agora contêm objetos Date, mas serão tratados nas funções de renderização
         dadosCompletosAluno.notas = notas;
         dadosCompletosAluno.presencas = presencas;
+
+        // SUGESTÃO 1: Calcular e Renderizar KPIs
+        const kpis = calcularKPIsAluno(notas, presencas);
+        document.getElementById('kpiMedia').textContent = `Média Final: ${kpis.mediaFinalAcumulada}`;
+        document.getElementById('kpiFaltas').textContent = `Faltas Totais: ${kpis.totalFaltas}`;
 
         const materiasUnicas = new Set(dadosCompletosAluno.notas.map(n => n.materia).concat(dadosCompletosAluno.presencas.map(p => p.materia)));
         // Garantir que 'todos' esteja selecionado
@@ -790,6 +985,19 @@ function mostrarSecaoAluno(secao) {
     }
     // Não é necessário renderizar Tarefas, pois o HTML já contém o placeholder inicial.
 }
+
+/**
+ * Função Auxiliar (SUGESTÃO 2) para obter a classe CSS da nota.
+ */
+function getNotaClass(nota) {
+    if (nota === '---' || isNaN(parseFloat(nota))) return '';
+    const valor = parseFloat(nota);
+    // Assumindo critérios de aprovação: >= 7.0, Recuperação: 5.0 - 6.9, Reprovação: < 5.0
+    if (valor >= 7.0) return 'nota-aprovado';
+    if (valor >= 5.0 && valor < 7.0) return 'nota-recuperacao';
+    return 'nota-reprovado';
+}
+
 
 function renderizarNotasAluno() {
     const conteudoNotas = document.getElementById('conteudoNotasAluno');
@@ -853,18 +1061,21 @@ function renderizarNotasAluno() {
                                 const nota = notaObj ? parseFloat(notaObj.nota) : '---';
                                 // Só adiciona ao cálculo da média se for um número válido
                                 if (nota !== '---' && !isNaN(nota)) notasDoTrimestre.push(nota);
-                                return `<td>${nota !== '---' ? nota.toFixed(1) : '---'}</td>`;
+                                const notaDisplay = nota !== '---' ? nota.toFixed(1) : '---';
+                                // SUGESTÃO 2: Aplicar Destaque
+                                return `<td class="${getNotaClass(notaDisplay)}">${notaDisplay}</td>`;
                             }).join('');
 
                             const mediaTrimestral = notasDoTrimestre.length > 0
                                 ? (notasDoTrimestre.reduce((sum, n) => sum + n, 0) / notasDoTrimestre.length).toFixed(1)
                                 : '---';
                             
+                            // SUGESTÃO 2: Aplicar Destaque na Média
                             return `
                                 <tr>
                                     <td>${nomeMateria}</td>
                                     ${rowData}
-                                    <td>${mediaTrimestral}</td>
+                                    <td class="${getNotaClass(mediaTrimestral)}" style="font-weight: bold;">${mediaTrimestral}</td>
                                 </tr>
                             `;
                         }).join('')}
@@ -914,12 +1125,15 @@ function renderizarNotasAluno() {
                             
                             const rowData = trimestresPadrao.map(trimestre => {
                                 const nota = dadosAvaliacao.notas[trimestre];
+                                const notaDisplay = nota !== undefined ? nota.toFixed(1) : '---';
+
                                 if (nota !== undefined) {
                                     if (!notasParaMediaFinal[trimestre]) notasParaMediaFinal[trimestre] = [];
                                     // Adiciona as notas de cada avaliação para calcular a média do trimestre
                                     notasParaMediaFinal[trimestre].push(nota); 
                                 }
-                                return `<td>${nota !== undefined ? nota.toFixed(1) : '---'}</td>`;
+                                // SUGESTÃO 2: Aplicar Destaque
+                                return `<td class="${getNotaClass(notaDisplay)}">${notaDisplay}</td>`;
                             }).join('');
                             
                             return `
@@ -936,7 +1150,8 @@ function renderizarNotasAluno() {
                                const media = notas.length > 0
                                    ? (notas.reduce((sum, n) => sum + n, 0) / notas.length).toFixed(1)
                                    : '---';
-                               return `<td style="font-weight: bold;">${media}</td>`;
+                                // SUGESTÃO 2: Aplicar Destaque na Média
+                               return `<td class="${getNotaClass(media)}" style="font-weight: bold;">${media}</td>`;
                            }).join('')}
                         </tr>
                     </tbody>
@@ -946,7 +1161,6 @@ function renderizarNotasAluno() {
     } 
     // =========================================================================
     // CASE 3: SEM FILTRO (ou filtros mistos) -> Matéria x Trimestre (Report Card)
-    // Este é o layout padrão Boletim Escolar
     // =========================================================================
     else {
         // Agrupar notas por Matéria e Trimestre e calcular as médias
@@ -993,21 +1207,26 @@ function renderizarNotasAluno() {
             const rowData = trimestresPadrao.map(trimestre => {
                 const notas = dadosMateria.notasPorTrimestre[trimestre];
                 let cellContent = '---';
+                let mediaTrimestre = '---';
                 
                 if (notas && notas.length > 0) {
-                    const mediaTrimestre = notas.reduce((sum, n) => sum + n, 0) / notas.length;
+                    mediaTrimestre = notas.reduce((sum, n) => sum + n, 0) / notas.length;
                     cellContent = mediaTrimestre.toFixed(1);
                     todasMediasTrimestrais.push(mediaTrimestre); // Adiciona para o cálculo da média final
                 }
                 
-                return `<td>${cellContent}</td>`;
+                // SUGESTÃO 2: Aplicar Destaque
+                return `<td class="${getNotaClass(cellContent)}">${cellContent}</td>`;
             }).join('');
 
             // 3. Calcular Média Final (Média de todos os trimestres com nota)
             const mediaFinalMateria = todasMediasTrimestrais.length > 0
                 ? todasMediasTrimestrais.reduce((sum, m) => sum + m, 0) / todasMediasTrimestrais.length
                 : '---';
-            const finalCell = mediaFinalMateria !== '---' ? `<td>${mediaFinalMateria.toFixed(1)}</td>` : `<td>---</td>`;
+            
+            const finalCellDisplay = mediaFinalMateria !== '---' ? mediaFinalMateria.toFixed(1) : '---';
+            // SUGESTÃO 2: Aplicar Destaque
+            const finalCell = `<td class="${getNotaClass(finalCellDisplay)}" style="font-weight: bold;">${finalCellDisplay}</td>`;
 
             html += `
                 <tr>
@@ -1048,16 +1267,19 @@ function renderizarFaltasAluno() {
     // 2. Agrupar faltas por Matéria e Trimestre
     const faltasAgrupadas = presencasFiltradas.reduce((acc, p) => {
         const materia = p.materia;
-        // Inferir o trimestre a partir da data de presença
+        // O trimestre é inferido, pois a API retorna apenas a data
         const trimestre = getTrimestreFromDate(p.data);
 
         if (!acc[materia]) {
-            acc[materia] = { '1': 0, '2': 0, '3': 0, 'total': 0 };
+            acc[materia] = { '1': 0, '2': 0, '3': 0, 'total': 0, faltasDetalhe: [] };
         }
 
-        if (p.status === 'falta' && trimestre) {
-            acc[materia][trimestre] += 1;
+        if (p.status === 'falta') {
+            if (trimestre) {
+                acc[materia][trimestre] += 1;
+            }
             acc[materia]['total'] += 1;
+            acc[materia].faltasDetalhe.push({ data: p.data, materia: p.materia, trimestre: trimestre });
         }
         return acc;
     }, {});
@@ -1105,6 +1327,57 @@ function renderizarFaltasAluno() {
             </table>
         </div>
     `;
+    
+    // SUGESTÃO 3: Lista Detalhada de Faltas (Mostrar a lista de datas abaixo da tabela)
+    if (materiaSelecionada !== 'todos') {
+        const dadosFaltasMateria = faltasAgrupadas[materiaSelecionada];
+        
+        if (dadosFaltasMateria && dadosFaltasMateria.faltasDetalhe.length > 0) {
+            html += `
+                <div class="lista-faltas-detalhada">
+                    <h4>Registro Detalhado de Faltas em ${materiaSelecionada.charAt(0).toUpperCase() + materiaSelecionada.slice(1)} (${dadosFaltasMateria.total} faltas)</h4>
+                    <ul>
+                        ${dadosFaltasMateria.faltasDetalhe.sort((a, b) => new Date(a.data) - new Date(b.data)).map(falta => {
+                            const dataFormatada = new Date(falta.data).toLocaleDateString('pt-BR');
+                            return `
+                                <li>
+                                    <span>${dataFormatada}</span>
+                                    <span style="color: #F44336; font-weight: 600;">Falta (T${falta.trimestre})</span>
+                                </li>
+                            `;
+                        }).join('')}
+                    </ul>
+                </div>
+            `;
+        } else if (materiaSelecionada !== 'todos') {
+             // Caso a matéria seja filtrada, mas não tenha faltas
+             html += `<p style="margin-top: 1.5rem;">Nenhuma falta registrada para ${materiaSelecionada.charAt(0).toUpperCase() + materiaSelecionada.slice(1)}.</p>`;
+        }
+    } else {
+        // Se estiver em 'todos' (visão geral), adiciona a lista detalhada completa de todas as faltas (ordenada por data)
+        const todasFaltasDetalhes = presencasFiltradas.filter(p => p.status === 'falta')
+            .map(p => ({ data: p.data, materia: p.materia, trimestre: getTrimestreFromDate(p.data) }));
+
+        if (todasFaltasDetalhes.length > 0) {
+             html += `
+                <div class="lista-faltas-detalhada">
+                    <h4>Todas as Faltas Registradas (${todasFaltasDetalhes.length} no total)</h4>
+                    <ul>
+                        ${todasFaltasDetalhes.sort((a, b) => new Date(a.data) - new Date(b.data)).map(falta => {
+                            const dataFormatada = new Date(falta.data).toLocaleDateString('pt-BR');
+                            const nomeMateria = falta.materia.charAt(0).toUpperCase() + falta.materia.slice(1);
+                            return `
+                                <li>
+                                    <span>${dataFormatada} - ${nomeMateria}</span>
+                                    <span style="color: #F44336; font-weight: 600;">Falta (T${falta.trimestre})</span>
+                                </li>
+                            `;
+                        }).join('')}
+                    </ul>
+                </div>
+            `;
+        }
+    }
 
     conteudoFaltas.innerHTML = html;
 }
