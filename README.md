@@ -1,0 +1,104 @@
+# 📚 PROJETO SIGEAS - Sistema de Gestão de Aulas
+
+**Tarefa 1 – Pesquisa, Concepção e Design (UX/UI)**
+
+## 🌟 Visão Geral do Projeto
+
+O SIGEAS é um Sistema de Gestão de Aulas completo, desenvolvido para centralizar as operações acadêmicas e administrativas. Ele fornece painéis dedicados para Administradores, Professores e Alunos, permitindo a gestão de turmas, matrículas, lançamento de notas e controle de frequência.
+
+O projeto foi estruturado em um backend (API REST) em Node.js e um frontend simples em HTML, CSS e JavaScript puro para demonstrar as funcionalidades.
+
+## ✨ Identidade Visual e Design
+
+A identidade visual do SIGEAS foi concebida para transmitir tranquilidade, confiança e modernidade.
+
+| Elemento | Cor | Código |
+| :--- | :--- | :--- |
+| **Primária** (Destaque/Botões) | Azul Petróleo | `#167D7F` |
+| **Secundária 1** (Títulos) | Azul Claro | `#29A0B1` |
+| **Secundária 2** (Fundo de Elementos) | Verde Médio | `#98D7C2` |
+| **Fundo Principal** | Verde Claro | `#DDFFE7` |
+
+**Tipografia:** Montserrat, escolhida pela clareza e alta legibilidade.
+
+## 💻 Tecnologias
+
+**Backend (API REST):**
+* **Linguagem:** Node.js
+* **Framework:** Express
+* **Banco de Dados:** MySQL (utilizando `mysql2`)
+* **Segurança:** JWT (`jsonwebtoken`) para autenticação e `bcrypt` para hash de senhas.
+
+**Frontend:**
+* **Linguagens:** HTML5, CSS3, JavaScript puro.
+
+## 🏗️ Estrutura do Projeto
+
+O projeto está organizado em duas pastas principais: `backend` (API) e `frontend` (Interface Web).
+
+.
+├── backend/
+│   ├── .env                       # Variáveis de ambiente (conexão com DB, JWT Secret)
+│   ├── db.sql                     # Script de criação do schema e tabelas
+│   ├── index.js                   # Ponto de entrada da aplicação e registro de rotas
+│   ├── seed.js                    # Script para popular o DB com dados de teste
+│   ├── routes/                    # Definição das rotas da API (auth, usuarios, turmas, chamadas, notas)
+│   └── ...                        # Arquivos de configuração e utilitários
+└── frontend/
+├── index.html                 # Página de Login
+├── admin.html                 # Painel do Administrador
+├── professor.html             # Painel do Professor
+├── aluno.html                 # Painel do Aluno
+├── style.css                  # Estilos globais e da interface
+└── script.js                  # Lógica de interação e chamadas à API
+
+
+## ⚙️ Configuração e Execução
+
+### 1. Configuração do Banco de Dados (MySQL)
+
+1.  **Crie o Banco:** Crie um banco de dados chamado `sigeas` no seu servidor MySQL.
+2.  **Crie as Tabelas:** Execute o script `backend/db.sql` para criar todas as tabelas necessárias (usuarios, turmas, professores_turmas, alunos_turmas, chamadas, avaliacoes).
+
+### 2. Configuração e Inicialização do Backend
+
+1.  **Variáveis de Ambiente:** No diretório `backend/`, crie um arquivo `.env` (se ainda não existir) e configure as credenciais do seu banco de dados MySQL.
+    ```env
+    PORT=4000
+    DB_HOST=localhost
+    DB_PORT=3306
+    DB_USER=root
+    DB_PASS=SUA_SENHA_MYSQL
+    DB_NAME=sigeas
+    JWT_SECRET=algunhasecretomuitoforte
+    JWT_EXPIRES_IN=8h
+    ```
+2.  **Instale as Dependências:**
+    ```bash
+    cd backend
+    npm install
+    ```
+3.  **Popule com Dados de Teste:** (Opcional, mas recomendado)
+    ```bash
+    npm run seed 
+    ```
+    Este comando cria um administrador, um professor e dois alunos de exemplo.
+4.  **Inicie o Servidor:**
+    ```bash
+    npm start
+    # A API estará rodando em http://localhost:4000
+    ```
+
+### 3. Execução do Frontend
+
+1.  Abra o arquivo `frontend/index.html` diretamente no seu navegador.
+
+## 🔑 Credenciais de Teste
+
+Utilize as seguintes credenciais no painel de Login (`index.html`):
+
+| Perfil | Usuário (Exemplo) | Senha |
+| :--- | :--- | :--- |
+| **Administrador** | `admin` (ou `claudia@sigeas.com`) | `123` |
+| **Professor** | `arlan` (ou `arlan@sigeas.com`) | `senha` |
+| **Aluno** | `marina` (ou `marina@sigeas.com`) | `senha` |
