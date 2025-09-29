@@ -69,9 +69,13 @@ router.get('/turma/:id/materia/:materia', authenticateToken, authorizeRoles('pro
 
 // POST /api/notas/lancar-em-lote -> Adiciona uma nova nota para todos os alunos de uma turma e materia
 router.post('/lancar-em-lote', authenticateToken, authorizeRoles('professor'), async (req, res) => {
-    const { id_turma, materia, descricao, trimestre, notas } = req.body;
+    // Renomeia 'trimestre' para 'trimestreString' na desestruturação
+    const { id_turma, materia, descricao, trimestre: trimestreString, notas } = req.body;
     
-    if (!id_turma || !materia || !descricao || !trimestre || !notas || notas.length === 0) {
+    // CORREÇÃO: Converte a string do trimestre para um número inteiro
+    const trimestre = parseInt(trimestreString);
+    
+    if (!id_turma || !materia || !descricao || isNaN(trimestre) || !notas || notas.length === 0) {
         return res.status(400).json({ error: 'Dados incompletos para o lançamento de notas.' });
     }
 

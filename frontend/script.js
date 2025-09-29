@@ -518,12 +518,12 @@ async function verAlunosParaChamada() {
             return;
         }
         
-        // SUGESTÃO PROFESSOR: Substituir Radio Buttons por Checkbox (Falta)
+        // CORREÇÃO: Adiciona o atributo 'checked' ao checkbox, definindo 'falta' como padrão.
         listaAlunosChamadaEl.innerHTML = alunos.map(aluno => `
             <li class="chamada-item">
                 <span>${aluno.nome}</span>
                 <div class="chamada-options">
-                    <input type="checkbox" id="falta_aluno_${aluno.id_usuario}" name="aluno_${aluno.id_usuario}" value="falta" class="input-falta"> 
+                    <input type="checkbox" id="falta_aluno_${aluno.id_usuario}" name="aluno_${aluno.id_usuario}" value="falta" class="input-falta" checked> 
                     <label for="falta_aluno_${aluno.id_usuario}">Marcar Falta</label>
                 </div>
             </li>
@@ -533,10 +533,16 @@ async function verAlunosParaChamada() {
             const presencasDoDia = await (await apiFetch(`/chamadas/turma/${id_turma}/materia/${materiaSelecionadaGlobal}/data/${hoje}`));
             for (const id_aluno in presencasDoDia) {
                 const status = presencasDoDia[id_aluno];
-                // Se o status for 'falta', marca o checkbox. Caso contrário, deixa desmarcado (que representa 'presente').
-                if (status === 'falta') {
-                    const checkbox = document.getElementById(`falta_aluno_${id_aluno}`);
-                    if (checkbox) checkbox.checked = true;
+                const checkbox = document.getElementById(`falta_aluno_${id_aluno}`);
+                if (checkbox) {
+                    // Lógica invertida: como o padrão é 'falta' (checked), só precisamos desmarcar se o status for 'presente'.
+                    if (status === 'presente') {
+                        checkbox.checked = false;
+                    } 
+                    // Se o status for 'falta', ele já estará marcado pelo HTML, mas confirmamos por segurança:
+                    else if (status === 'falta') {
+                        checkbox.checked = true;
+                    }
                 }
             }
         } catch (presencaError) {
@@ -812,8 +818,13 @@ async function abrirModalAddAvaliacao() {
             const trimestre = document.getElementById('trimestre').value;
             const notas = [];
             const form = event.target;
+            
+            // CORREÇÃO CRÍTICA: Extrai corretamente o ID do aluno.
             form.querySelectorAll('input[type="number"]').forEach(input => {
-                const id_aluno = input.name.replace('aluno_', '');
+                // O nome do input é "nota_ID", então substituímos "nota_" para obter o ID
+                const id_aluno = input.name.replace('nota_', ''); 
+                
+                // Converte o ID para número (integer) e a nota para float
                 notas.push({ id_aluno: parseInt(id_aluno), nota: parseFloat(input.value) });
             });
             
@@ -1260,7 +1271,7 @@ function renderizarFaltasAluno() {
     });
 
     if (presencasFiltradas.length === 0) {
-        conteudoFaltas.innerHTML = '<p>Nenhum registro de chamada encontrado com os filtros selecionados.</p>';
+        conteudoFaltas.innerHTML = '<p>Nenhuma registro de chamada encontrado com os filtros selecionados.</p>';
         return;
     }
 
