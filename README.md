@@ -114,3 +114,10 @@ Utilize as seguintes credenciais no painel de Login (`index.html`):
 | **Administrador** | `admin` (ou `mari@sigeas.com`) | `senha` |
 | **Professor** | `professor` (ou `iuri@sigeas.com`) | `senha` |
 | **Aluno** | `aluno` (ou `marina@sigeas.com`) | `senha` |
+
+## 🧠 Dificuldades e Aprendizados
+
+Esta seção descreve os principais desafios enfrentados e as lições aprendidas durante o desenvolvimento do projeto SIGEAS:
+
+* **Desafio de UX/UI:** Uma dificuldade encontrada foi a idealização de uma interface que fosse simultaneamente bonita, intuitiva e simples, resultando na percepção de que a performance no quesito design poderia ter sido melhor.
+* **Reestruturação do Modelo de Turmas:** Outra dificuldade significativa foi o sistema de associação entre professores, matérias e turmas. Inicialmente, o projeto considerava o modelo de um professor por turma, responsável por todas as matérias. Ao perceber a necessidade de permitir que vários professores gerenciassem a mesma turma, cada um focado em matérias específicas, foi preciso reestruturar o projeto já em andamento. Essa reestruturação envolveu a criação de uma relação N:N mais complexa (`professores_turmas`) que inclui a coluna `materia`.
