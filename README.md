@@ -36,22 +36,34 @@ A identidade visual do SIGEAS foi concebida para transmitir tranquilidade, confi
 
 O projeto está organizado em duas pastas principais: `backend` (API) e `frontend` (Interface Web).
 
-.
+
+```text
+├── .gitignore
+├── DESIGN.md
+├── package-lock.json
 ├── backend/
 │   ├── .env                       # Variáveis de ambiente (conexão com DB, JWT Secret)
-│   ├── db.sql                     # Script de criação do schema e tabelas
 │   ├── index.js                   # Ponto de entrada da aplicação e registro de rotas
+│   ├── package.json               # Dependências do Node.js
+│   ├── package-lock.json
+│   ├── db.js                      # Configuração da pool de conexão com MySQL
+│   ├── db.sql                     # Script de criação do schema e tabelas
+│   ├── authMiddleware.js          # Middleware de autenticação JWT e autorização de perfis
 │   ├── seed.js                    # Script para popular o DB com dados de teste
-│   ├── routes/                    # Definição das rotas da API (auth, usuarios, turmas, chamadas, notas)
-│   └── ...                        # Arquivos de configuração e utilitários
+│   └── routes/                    # Definição das rotas da API
+│       ├── auth.js                # Rota de Login
+│       ├── usuarios.js            # Rotas para gestão de usuários (CRUD, listagem)
+│       ├── turmas.js              # Rotas para gestão de turmas (CRUD, listagem, alunos da turma)
+│       ├── chamadas.js            # Rotas para gestão de presença e falta
+│       └── notas.js               # Rotas para gestão de notas e avaliações
 └── frontend/
-├── index.html                 # Página de Login
-├── admin.html                 # Painel do Administrador
-├── professor.html             # Painel do Professor
-├── aluno.html                 # Painel do Aluno
-├── style.css                  # Estilos globais e da interface
-└── script.js                  # Lógica de interação e chamadas à API
-
+    ├── index.html                 # Página de Login
+    ├── admin.html                 # Painel do Administrador
+    ├── professor.html             # Painel do Professor
+    ├── aluno.html                 # Painel do Aluno
+    ├── style.css                  # Estilos globais da interface
+    └── script.js                  # Lógica de interação e chamadas à API (frontend)
+```
 
 ## ⚙️ Configuração e Execução
 
