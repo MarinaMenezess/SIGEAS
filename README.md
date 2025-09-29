@@ -111,6 +111,6 @@ Utilize as seguintes credenciais no painel de Login (`index.html`):
 
 | Perfil | Usuário (Exemplo) | Senha |
 | :--- | :--- | :--- |
-| **Administrador** | `admin` (ou `claudia@sigeas.com`) | `123` |
-| **Professor** | `arlan` (ou `arlan@sigeas.com`) | `senha` |
-| **Aluno** | `marina` (ou `marina@sigeas.com`) | `senha` |
+| **Administrador** | `admin` (ou `mari@sigeas.com`) | `senha` |
+| **Professor** | `professor` (ou `iuri@sigeas.com`) | `senha` |
+| **Aluno** | `aluno` (ou `marina@sigeas.com`) | `senha` |
