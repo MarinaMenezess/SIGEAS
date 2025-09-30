@@ -10,7 +10,7 @@ async function run(){
     const senhaStu = await bcrypt.hash('senha', 10);
 
     await pool.query('INSERT INTO usuarios (nome,email,senha,perfil) VALUES (?, ?, ?, ?)', ['Mari', 'mari@sigeas.com', senhaAdmin, 'administrador']);
-    const [r1] = await pool.query('INSERT INTO usuarios (nome,email,senha,perfil) VALUES (?, ?, ?, ?)', ['Arlan', 'arlan@sigeas.com', senhaProf, 'professor']);
+    const [r1] = await pool.query('INSERT INTO usuarios (nome,email,senha,perfil) VALUES (?, ?, ?, ?)', ['Iuri', 'iuri@sigeas.com', senhaProf, 'professor']);
     const idProf = r1.insertId;
     await pool.query('INSERT INTO usuarios (nome,email,senha,perfil) VALUES (?, ?, ?, ?), (?, ?, ?, ?)', ['Marina','marina@sigeas.com',senhaStu,'aluno']);
 
